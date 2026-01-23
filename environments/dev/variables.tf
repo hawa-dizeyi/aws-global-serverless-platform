@@ -46,3 +46,15 @@ variable "enable_r53_health_checks" {
   default     = false
   description = "Enable Route 53 health checks (may cost monthly)."
 }
+
+variable "root_domain" {
+  type        = string
+  description = "Public domain you own (managed in Route 53)."
+  default     = "hawser-labs.online"
+}
+
+variable "api_subdomain" {
+  type        = string
+  description = "Subdomain for the API."
+  default     = "api"
+}

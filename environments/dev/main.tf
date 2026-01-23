@@ -144,3 +144,187 @@ module "api_secondary" {
   throttle_rate_limit  = 5
   throttle_burst_limit = 10
 }
+
+locals {
+  api_fqdn = "${var.api_subdomain}.${var.root_domain}"
+}
+
+resource "aws_route53_zone" "public" {
+  name = var.root_domain
+}
+
+output "route53_nameservers" {
+  value = aws_route53_zone.public.name_servers
+}
+
+# --- ACM cert in PRIMARY region (eu-west-1) ---
+resource "aws_acm_certificate" "api_primary" {
+  domain_name       = local.api_fqdn
+  validation_method = "DNS"
+}
+
+resource "aws_route53_record" "api_primary_cert_validation" {
+  allow_overwrite = true
+
+  for_each = {
+    for dvo in aws_acm_certificate.api_primary.domain_validation_options : dvo.domain_name => {
+      name   = dvo.resource_record_name
+      type   = dvo.resource_record_type
+      record = dvo.resource_record_value
+    }
+  }
+
+  zone_id = aws_route53_zone.public.zone_id
+  name    = each.value.name
+  type    = each.value.type
+  ttl     = 60
+  records = [each.value.record]
+}
+
+resource "aws_acm_certificate_validation" "api_primary" {
+  certificate_arn         = aws_acm_certificate.api_primary.arn
+  validation_record_fqdns = [for r in aws_route53_record.api_primary_cert_validation : r.fqdn]
+}
+
+# --- ACM cert in SECONDARY region (eu-central-1) ---
+resource "aws_acm_certificate" "api_secondary" {
+  provider          = aws.secondary
+  domain_name       = local.api_fqdn
+  validation_method = "DNS"
+}
+
+resource "aws_route53_record" "api_secondary_cert_validation" {
+  allow_overwrite = true
+
+  for_each = {
+    for dvo in aws_acm_certificate.api_secondary.domain_validation_options : dvo.domain_name => {
+      name   = dvo.resource_record_name
+      type   = dvo.resource_record_type
+      record = dvo.resource_record_value
+    }
+  }
+
+  zone_id = aws_route53_zone.public.zone_id
+  name    = each.value.name
+  type    = each.value.type
+  ttl     = 60
+  records = [each.value.record]
+}
+
+resource "aws_acm_certificate_validation" "api_secondary" {
+  provider                = aws.secondary
+  certificate_arn         = aws_acm_certificate.api_secondary.arn
+  validation_record_fqdns = [for r in aws_route53_record.api_secondary_cert_validation : r.fqdn]
+}
+
+# --- API Gateway custom domain in PRIMARY (eu-west-1) ---
+resource "aws_apigatewayv2_domain_name" "api_primary" {
+  domain_name = local.api_fqdn
+
+  domain_name_configuration {
+    certificate_arn = aws_acm_certificate_validation.api_primary.certificate_arn
+    endpoint_type   = "REGIONAL"
+    security_policy = "TLS_1_2"
+  }
+}
+
+resource "aws_apigatewayv2_api_mapping" "api_primary" {
+  api_id      = module.api_primary.api_id
+  domain_name = aws_apigatewayv2_domain_name.api_primary.id
+  stage       = "$default"
+}
+
+# --- API Gateway custom domain in SECONDARY (eu-central-1) ---
+resource "aws_apigatewayv2_domain_name" "api_secondary" {
+  provider    = aws.secondary
+  domain_name = local.api_fqdn
+
+  domain_name_configuration {
+    certificate_arn = aws_acm_certificate_validation.api_secondary.certificate_arn
+    endpoint_type   = "REGIONAL"
+    security_policy = "TLS_1_2"
+  }
+}
+
+resource "aws_apigatewayv2_api_mapping" "api_secondary" {
+  provider    = aws.secondary
+  api_id      = module.api_secondary.api_id
+  domain_name = aws_apigatewayv2_domain_name.api_secondary.id
+  stage       = "$default"
+}
+
+# Latency routing (A record) - PRIMARY
+resource "aws_route53_record" "api_latency_primary_a" {
+  zone_id = aws_route53_zone.public.zone_id
+  name    = local.api_fqdn
+  type    = "A"
+
+  set_identifier = "primary-eu-west-1"
+
+  latency_routing_policy {
+    region = var.primary_region
+  }
+
+  alias {
+    name                   = aws_apigatewayv2_domain_name.api_primary.domain_name_configuration[0].target_domain_name
+    zone_id                = aws_apigatewayv2_domain_name.api_primary.domain_name_configuration[0].hosted_zone_id
+    evaluate_target_health = false
+  }
+}
+
+# Latency routing (A record) - SECONDARY
+resource "aws_route53_record" "api_latency_secondary_a" {
+  zone_id = aws_route53_zone.public.zone_id
+  name    = local.api_fqdn
+  type    = "A"
+
+  set_identifier = "secondary-eu-central-1"
+
+  latency_routing_policy {
+    region = var.secondary_region
+  }
+
+  alias {
+    name                   = aws_apigatewayv2_domain_name.api_secondary.domain_name_configuration[0].target_domain_name
+    zone_id                = aws_apigatewayv2_domain_name.api_secondary.domain_name_configuration[0].hosted_zone_id
+    evaluate_target_health = false
+  }
+}
+
+# Latency routing (AAAA record) - PRIMARY
+resource "aws_route53_record" "api_latency_primary_aaaa" {
+  zone_id = aws_route53_zone.public.zone_id
+  name    = local.api_fqdn
+  type    = "AAAA"
+
+  set_identifier = "primary-eu-west-1-aaaa"
+
+  latency_routing_policy {
+    region = var.primary_region
+  }
+
+  alias {
+    name                   = aws_apigatewayv2_domain_name.api_primary.domain_name_configuration[0].target_domain_name
+    zone_id                = aws_apigatewayv2_domain_name.api_primary.domain_name_configuration[0].hosted_zone_id
+    evaluate_target_health = false
+  }
+}
+
+# Latency routing (AAAA record) - SECONDARY
+resource "aws_route53_record" "api_latency_secondary_aaaa" {
+  zone_id = aws_route53_zone.public.zone_id
+  name    = local.api_fqdn
+  type    = "AAAA"
+
+  set_identifier = "secondary-eu-central-1-aaaa"
+
+  latency_routing_policy {
+    region = var.secondary_region
+  }
+
+  alias {
+    name                   = aws_apigatewayv2_domain_name.api_secondary.domain_name_configuration[0].target_domain_name
+    zone_id                = aws_apigatewayv2_domain_name.api_secondary.domain_name_configuration[0].hosted_zone_id
+    evaluate_target_health = false
+  }
+}

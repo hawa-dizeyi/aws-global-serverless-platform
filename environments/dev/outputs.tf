@@ -33,3 +33,7 @@ output "api_primary_endpoint" {
 output "api_secondary_endpoint" {
   value = module.api_secondary.api_endpoint
 }
+
+output "api_fqdn" {
+  value = local.api_fqdn
+}
