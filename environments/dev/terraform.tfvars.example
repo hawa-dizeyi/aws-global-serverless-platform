@@ -1,0 +1,11 @@
+aws_profile = "serverless-admin"
+
+project_name = "project-02-global-serverless"
+environment  = "dev"
+
+primary_region   = "eu-west-1"
+secondary_region = "eu-central-1"
+
+enable_cloudfront        = false
+enable_waf               = false
+enable_r53_health_checks = false
