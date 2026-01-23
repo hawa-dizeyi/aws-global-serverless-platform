@@ -25,3 +25,11 @@ output "lambda_primary_name" {
 output "lambda_secondary_name" {
   value = module.lambda_secondary.function_name
 }
+
+output "api_primary_endpoint" {
+  value = module.api_primary.api_endpoint
+}
+
+output "api_secondary_endpoint" {
+  value = module.api_secondary.api_endpoint
+}

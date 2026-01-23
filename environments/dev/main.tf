@@ -41,6 +41,13 @@ resource "aws_iam_role_policy_attachment" "lambda_basic_logs" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
 }
 
+data "aws_caller_identity" "current" {}
+
+locals {
+  ddb_table_arn_primary   = module.dynamodb.table_arn
+  ddb_table_arn_secondary = "arn:aws:dynamodb:${var.secondary_region}:${data.aws_caller_identity.current.account_id}:table/${module.dynamodb.table_name}"
+}
+
 data "aws_iam_policy_document" "ddb_access" {
   statement {
     effect = "Allow"
@@ -54,8 +61,10 @@ data "aws_iam_policy_document" "ddb_access" {
       "dynamodb:DescribeTable"
     ]
     resources = [
-      module.dynamodb.table_arn,
-      "${module.dynamodb.table_arn}/*"
+      local.ddb_table_arn_primary,
+      "${local.ddb_table_arn_primary}/*",
+      local.ddb_table_arn_secondary,
+      "${local.ddb_table_arn_secondary}/*"
     ]
   }
 }
@@ -104,4 +113,34 @@ module "lambda_secondary" {
   runtime              = "python3.12"
   log_retention_days   = 3
   reserved_concurrency = null
+}
+
+module "api_primary" {
+  source = "../../modules/api"
+
+  providers = { aws = aws }
+
+  name_prefix          = module.providers.name_prefix
+  api_suffix           = "primary"
+  lambda_invoke_arn    = module.lambda_primary.invoke_arn
+  lambda_function_name = module.lambda_primary.function_name
+
+  log_retention_days   = 3
+  throttle_rate_limit  = 5
+  throttle_burst_limit = 10
+}
+
+module "api_secondary" {
+  source = "../../modules/api"
+
+  providers = { aws = aws.secondary }
+
+  name_prefix          = module.providers.name_prefix
+  api_suffix           = "secondary"
+  lambda_invoke_arn    = module.lambda_secondary.invoke_arn
+  lambda_function_name = module.lambda_secondary.function_name
+
+  log_retention_days   = 3
+  throttle_rate_limit  = 5
+  throttle_burst_limit = 10
 }
