@@ -157,22 +157,50 @@ output "route53_nameservers" {
   value = aws_route53_zone.public.name_servers
 }
 
-# --- ACM cert in PRIMARY region (eu-west-1) ---
+#############################################
+# Step 4B Phase 1 — ACM Certificates (DNS)
+#############################################
+
+# PRIMARY cert (eu-west-1)
 resource "aws_acm_certificate" "api_primary" {
+  count             = var.step4_enable_acm ? 1 : 0
   domain_name       = local.api_fqdn
   validation_method = "DNS"
 }
 
-resource "aws_route53_record" "api_primary_cert_validation" {
-  allow_overwrite = true
+# SECONDARY cert (eu-central-1)
+resource "aws_acm_certificate" "api_secondary" {
+  count             = var.step4_enable_acm ? 1 : 0
+  provider          = aws.secondary
+  domain_name       = local.api_fqdn
+  validation_method = "DNS"
+}
 
-  for_each = {
-    for dvo in aws_acm_certificate.api_primary.domain_validation_options : dvo.domain_name => {
+# Create DNS validation records ONCE (shared) so we don't collide
+locals {
+  # domain_validation_options is a SET and may produce identical validation CNAMEs across regions.
+  # We group by record_name and then take the first entry to deduplicate.
+  acm_validation_records_grouped = var.step4_enable_acm ? {
+    for dvo in concat(
+      tolist(aws_acm_certificate.api_primary[0].domain_validation_options),
+      tolist(aws_acm_certificate.api_secondary[0].domain_validation_options)
+      ) : dvo.resource_record_name => {
       name   = dvo.resource_record_name
       type   = dvo.resource_record_type
       record = dvo.resource_record_value
-    }
+    }...
+  } : {}
+
+  acm_validation_records = {
+    for k, v in local.acm_validation_records_grouped : k => v[0]
   }
+}
+
+
+resource "aws_route53_record" "api_acm_cert_validation" {
+  for_each = local.acm_validation_records
+
+  allow_overwrite = true
 
   zone_id = aws_route53_zone.public.zone_id
   name    = each.value.name
@@ -182,79 +210,70 @@ resource "aws_route53_record" "api_primary_cert_validation" {
 }
 
 resource "aws_acm_certificate_validation" "api_primary" {
-  certificate_arn         = aws_acm_certificate.api_primary.arn
-  validation_record_fqdns = [for r in aws_route53_record.api_primary_cert_validation : r.fqdn]
-}
-
-# --- ACM cert in SECONDARY region (eu-central-1) ---
-resource "aws_acm_certificate" "api_secondary" {
-  provider          = aws.secondary
-  domain_name       = local.api_fqdn
-  validation_method = "DNS"
-}
-
-resource "aws_route53_record" "api_secondary_cert_validation" {
-  allow_overwrite = true
-
-  for_each = {
-    for dvo in aws_acm_certificate.api_secondary.domain_validation_options : dvo.domain_name => {
-      name   = dvo.resource_record_name
-      type   = dvo.resource_record_type
-      record = dvo.resource_record_value
-    }
-  }
-
-  zone_id = aws_route53_zone.public.zone_id
-  name    = each.value.name
-  type    = each.value.type
-  ttl     = 60
-  records = [each.value.record]
+  count                   = var.step4_enable_acm ? 1 : 0
+  certificate_arn         = aws_acm_certificate.api_primary[0].arn
+  validation_record_fqdns = [for r in aws_route53_record.api_acm_cert_validation : r.fqdn]
 }
 
 resource "aws_acm_certificate_validation" "api_secondary" {
+  count                   = var.step4_enable_acm ? 1 : 0
   provider                = aws.secondary
-  certificate_arn         = aws_acm_certificate.api_secondary.arn
-  validation_record_fqdns = [for r in aws_route53_record.api_secondary_cert_validation : r.fqdn]
+  certificate_arn         = aws_acm_certificate.api_secondary[0].arn
+  validation_record_fqdns = [for r in aws_route53_record.api_acm_cert_validation : r.fqdn]
 }
 
-# --- API Gateway custom domain in PRIMARY (eu-west-1) ---
+#############################################
+# Step 4B Phase 2 — API Gateway Custom Domains
+#############################################
+
 resource "aws_apigatewayv2_domain_name" "api_primary" {
+  count       = var.step4_enable_custom_domain ? 1 : 0
   domain_name = local.api_fqdn
 
   domain_name_configuration {
-    certificate_arn = aws_acm_certificate_validation.api_primary.certificate_arn
+    certificate_arn = aws_acm_certificate_validation.api_primary[0].certificate_arn
     endpoint_type   = "REGIONAL"
     security_policy = "TLS_1_2"
   }
+
+  depends_on = [aws_acm_certificate_validation.api_primary]
 }
 
 resource "aws_apigatewayv2_api_mapping" "api_primary" {
+  count       = var.step4_enable_custom_domain ? 1 : 0
   api_id      = module.api_primary.api_id
-  domain_name = aws_apigatewayv2_domain_name.api_primary.id
+  domain_name = aws_apigatewayv2_domain_name.api_primary[0].id
   stage       = "$default"
 }
 
-# --- API Gateway custom domain in SECONDARY (eu-central-1) ---
 resource "aws_apigatewayv2_domain_name" "api_secondary" {
+  count       = var.step4_enable_custom_domain ? 1 : 0
   provider    = aws.secondary
   domain_name = local.api_fqdn
 
   domain_name_configuration {
-    certificate_arn = aws_acm_certificate_validation.api_secondary.certificate_arn
+    certificate_arn = aws_acm_certificate_validation.api_secondary[0].certificate_arn
     endpoint_type   = "REGIONAL"
     security_policy = "TLS_1_2"
   }
+
+  depends_on = [aws_acm_certificate_validation.api_secondary]
 }
 
 resource "aws_apigatewayv2_api_mapping" "api_secondary" {
+  count       = var.step4_enable_custom_domain ? 1 : 0
   provider    = aws.secondary
   api_id      = module.api_secondary.api_id
-  domain_name = aws_apigatewayv2_domain_name.api_secondary.id
+  domain_name = aws_apigatewayv2_domain_name.api_secondary[0].id
   stage       = "$default"
 }
 
-# Latency routing (A record) - PRIMARY
+#############################################
+# Step 4B Phase 3 — Route 53 Latency Records
+#############################################
+
 resource "aws_route53_record" "api_latency_primary_a" {
+  count   = var.step4_enable_latency_records ? 1 : 0
   zone_id = aws_route53_zone.public.zone_id
   name    = local.api_fqdn
   type    = "A"
@@ -266,14 +285,14 @@ resource "aws_route53_record" "api_latency_primary_a" {
   }
 
   alias {
-    name                   = aws_apigatewayv2_domain_name.api_primary.domain_name_configuration[0].target_domain_name
-    zone_id                = aws_apigatewayv2_domain_name.api_primary.domain_name_configuration[0].hosted_zone_id
+    name                   = aws_apigatewayv2_domain_name.api_primary[0].domain_name_configuration[0].target_domain_name
+    zone_id                = aws_apigatewayv2_domain_name.api_primary[0].domain_name_configuration[0].hosted_zone_id
     evaluate_target_health = false
   }
 }
 
-# Latency routing (A record) - SECONDARY
 resource "aws_route53_record" "api_latency_secondary_a" {
+  count   = var.step4_enable_latency_records ? 1 : 0
   zone_id = aws_route53_zone.public.zone_id
   name    = local.api_fqdn
   type    = "A"
@@ -285,14 +304,14 @@ resource "aws_route53_record" "api_latency_secondary_a" {
   }
 
   alias {
-    name                   = aws_apigatewayv2_domain_name.api_secondary.domain_name_configuration[0].target_domain_name
-    zone_id                = aws_apigatewayv2_domain_name.api_secondary.domain_name_configuration[0].hosted_zone_id
+    name                   = aws_apigatewayv2_domain_name.api_secondary[0].domain_name_configuration[0].target_domain_name
+    zone_id                = aws_apigatewayv2_domain_name.api_secondary[0].domain_name_configuration[0].hosted_zone_id
     evaluate_target_health = false
   }
 }
 
-# Latency routing (AAAA record) - PRIMARY
 resource "aws_route53_record" "api_latency_primary_aaaa" {
+  count   = var.step4_enable_latency_records ? 1 : 0
   zone_id = aws_route53_zone.public.zone_id
   name    = local.api_fqdn
   type    = "AAAA"
@@ -304,14 +323,14 @@ resource "aws_route53_record" "api_latency_primary_aaaa" {
   }
 
   alias {
-    name                   = aws_apigatewayv2_domain_name.api_primary.domain_name_configuration[0].target_domain_name
-    zone_id                = aws_apigatewayv2_domain_name.api_primary.domain_name_configuration[0].hosted_zone_id
+    name                   = aws_apigatewayv2_domain_name.api_primary[0].domain_name_configuration[0].target_domain_name
+    zone_id                = aws_apigatewayv2_domain_name.api_primary[0].domain_name_configuration[0].hosted_zone_id
     evaluate_target_health = false
   }
 }
 
-# Latency routing (AAAA record) - SECONDARY
 resource "aws_route53_record" "api_latency_secondary_aaaa" {
+  count   = var.step4_enable_latency_records ? 1 : 0
   zone_id = aws_route53_zone.public.zone_id
   name    = local.api_fqdn
   type    = "AAAA"
@@ -323,8 +342,8 @@ resource "aws_route53_record" "api_latency_secondary_aaaa" {
   }
 
   alias {
-    name                   = aws_apigatewayv2_domain_name.api_secondary.domain_name_configuration[0].target_domain_name
-    zone_id                = aws_apigatewayv2_domain_name.api_secondary.domain_name_configuration[0].hosted_zone_id
+    name                   = aws_apigatewayv2_domain_name.api_secondary[0].domain_name_configuration[0].target_domain_name
+    zone_id                = aws_apigatewayv2_domain_name.api_secondary[0].domain_name_configuration[0].hosted_zone_id
     evaluate_target_health = false
   }
 }

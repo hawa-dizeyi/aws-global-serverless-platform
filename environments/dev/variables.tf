@@ -58,3 +58,21 @@ variable "api_subdomain" {
   description = "Subdomain for the API."
   default     = "api"
 }
+
+variable "step4_enable_acm" {
+  type        = bool
+  default     = false
+  description = "Step 4B Phase 1: Request ACM certs + DNS validation records."
+}
+
+variable "step4_enable_custom_domain" {
+  type        = bool
+  default     = false
+  description = "Step 4B Phase 2: Create API Gateway custom domains + API mappings."
+}
+
+variable "step4_enable_latency_records" {
+  type        = bool
+  default     = false
+  description = "Step 4B Phase 3: Create Route53 latency alias records for api subdomain."
+}
