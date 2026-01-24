@@ -1,8 +1,8 @@
 # 🌍 Project 02 — Global Serverless Platform (Multi-Region, Active-Active)
 
-This project demonstrates the design and implementation of a **globally distributed, serverless platform on AWS**, built with **Terraform** and following **production-grade cloud engineering practices**.
+This project demonstrates the design and implementation of a **globally distributed, serverless backend on AWS**, built with **Terraform** and following **production-grade cloud engineering practices**.
 
-The architecture is **multi-region (active-active)**, highly available, cost-aware, and designed for **zero-downtime regional failover**.
+The platform is **multi-region (active-active)**, highly available, cost-aware, and designed for **zero-downtime regional resilience** using DNS-based traffic steering.
 
 ---
 
@@ -10,20 +10,20 @@ The architecture is **multi-region (active-active)**, highly available, cost-awa
 
 - Build a **multi-region serverless backend** using AWS native services
 - Demonstrate **active-active architecture** across regions
-- Implement **infrastructure as code** with Terraform
+- Implement infrastructure as code with **Terraform**
 - Apply **cost controls and safe defaults**
-- Produce **clear documentation and deployment proof** suitable for a professional portfolio
+- Produce clear documentation and deployment proof suitable for a professional portfolio
 
 ---
 
 ## 🌐 Region Strategy
 
-| Role | AWS Region |
-|------|-----------|
-| Primary | eu-west-1 (Europe – Ireland) |
+| Role       | AWS Region |
+|-----------|------------|
+| Primary   | eu-west-1 (Europe – Ireland) |
 | Secondary | eu-central-1 (Europe – Frankfurt) |
 
-**Why this choice:**
+**Why this pairing:**
 - Low latency for EU users
 - Strong regional separation
 - Common real-world production pairing in Europe
@@ -33,47 +33,75 @@ The architecture is **multi-region (active-active)**, highly available, cost-awa
 
 ## 🏗️ Architecture (Current State)
 
-### Implemented Components
-
 ### 1️⃣ Infrastructure Foundation
+
 - Terraform multi-provider setup
-- Explicit primary / secondary region aliasing
-- Environment-scoped configuration (environments/dev)
+- Explicit primary/secondary provider aliasing
+- Environment-scoped configuration (`environments/dev`)
 - Centralized naming and tagging strategy
-- Feature flags for optional services (CloudFront, WAF, health checks)
+- Feature flags for optional services (CloudFront, WAF, Route 53 health checks)
+- Safe defaults to reduce accidental cost/blast radius
 
 ---
 
 ### 2️⃣ Global Data Layer — DynamoDB Global Tables
+
 - DynamoDB Global Table spanning:
   - eu-west-1
   - eu-central-1
-- PAY_PER_REQUEST billing (no capacity planning)
+- `PAY_PER_REQUEST` billing (no capacity planning)
 - TTL enabled for automatic cleanup of test data
 - DynamoDB Streams enabled (required for global replication)
 
-**Result:**  
-Data written in one region is automatically replicated to the other region.
+**Result:** Writes in one region automatically replicate to the other.
 
-Screenshots location:
-  screenshots/dynamodb/
+📸 Screenshots: `screenshots/dynamodb/`
 
 ---
 
 ### 3️⃣ Compute Layer — AWS Lambda (Multi-Region)
+
 - Identical Lambda functions deployed in both regions
-- Runtime: Python 3.12
-- ZIP-based deployment using Terraform
-- Shared execution role with least-privilege DynamoDB access
+- Runtime: **Python 3.12**
+- ZIP-based deployment using Terraform (`archive_file`)
+- Shared execution role with **least-privilege** DynamoDB access
 - Short CloudWatch log retention (cost-controlled)
 - No reserved concurrency (avoids account-level constraints)
 
-**Lambda capabilities:**
-- /health — regional health endpoint
-- /write — writes data to DynamoDB (replicated globally)
+**Endpoints:**
+- `GET /health` — regional health response
+- `POST /write` — writes to DynamoDB (replicated globally)
 
-Screenshots location:
-  screenshots/lambda/
+📸 Screenshots: `screenshots/lambda/`
+
+---
+
+### 4️⃣ API Layer — API Gateway (Active-Active)
+
+- HTTP API Gateway deployed independently in both regions
+- Regional APIs integrated with regional Lambdas
+- Identical routes in each region:
+  - `GET /health`
+  - `POST /write`
+- Throttling + safe defaults enabled
+- Regions are decoupled (no cross-region dependency)
+
+📸 Screenshots: `screenshots/api-gateway/`
+
+---
+
+### 5️⃣ Global Traffic Management — Route 53 (Latency-Based Routing)
+
+- Public hosted zone for real domain: **hawser-labs.online**
+- Subdomain: **api.hawser-labs.online**
+- Active-active latency routing:
+  - `A` records (IPv4) for Ireland + Frankfurt
+  - `AAAA` records (IPv6) for Ireland + Frankfurt
+- Alias records point to regional API Gateway custom domains
+- Clients are routed to the lowest-latency region automatically
+- Health-check routing is available but feature-flagged
+
+📸 Screenshots: `screenshots/route53/`
 
 ---
 
@@ -81,15 +109,16 @@ Screenshots location:
 
 - No static credentials committed
 - IAM least-privilege policies
-- No NAT gateways, EC2, or always-on services
-- Short log retention
-- Feature-flagged edge services to avoid accidental cost
-- Terraform state kept clean and reproducible
+- No EC2, NAT Gateways, or always-on infrastructure
+- Short log retention across services
+- Feature-flagged edge services (CloudFront, WAF)
+- Clean, reproducible Terraform state
 
 ---
 
 ## 📁 Repository Structure
 
+```text
 .
 ├── environments/
 │   └── dev/
@@ -98,79 +127,49 @@ Screenshots location:
 │       ├── variables.tf
 │       ├── outputs.tf
 │       └── terraform.tfvars.example
-│
 ├── modules/
 │   ├── providers/
 │   ├── dynamodb/
-│   └── lambda/
-│
+│   ├── lambda/
+│   └── api/
 ├── src/
 │   └── lambda/
 │       └── app.py
-│
 ├── screenshots/
 │   ├── dynamodb/
-│   └── lambda/
-│
+│   ├── lambda/
+│   ├── api-gateway/
+│   └── route53/
 └── README.md
 
 ---
 
-## 🚧 Planned Work (Roadmap)
-
-### 4️⃣ API Layer — API Gateway (Active-Active)
-- HTTP API Gateway in both regions
-- Regional endpoints mapped to regional Lambdas
-- Routes:
-  - GET /health
-  - POST /write
-- Throttling and safe defaults enabled
-
----
-
-### 5️⃣ Global Traffic Management — Route 53
-- Latency-based routing
-- Active-active DNS records
-- Optional health-check routing (feature-flagged)
-- Demonstrated regional failover
-
----
-
-### 6️⃣ Event-Driven Architecture
-- Amazon EventBridge
-- Event producers and consumers
-- Loose coupling between components
-- Foundation for async workflows
-
----
-
-### 7️⃣ Edge & Security Layer (Optional)
-- Amazon CloudFront
-- AWS WAF
-- Minimal rule set
-- Enabled only for demo and documentation
-
----
-
 ## 📌 Key Engineering Takeaways
-- Designed for failure by default
-- Infrastructure built incrementally and safely
-- Real-world AWS constraints handled explicitly
-- Terraform used as a first-class engineering tool
-- Documentation treated as part of the deliverable
+
+- Designed for failure by default (no single-region dependency)
+- True active-active architecture with independent regional stacks
+- DNS-based traffic steering via Route 53 latency routing
+- Global replication handled by DynamoDB Global Tables (not custom code)
+- Cost-aware defaults: no NAT/EC2, short log retention, feature flags
+- Incremental rollout with low blast radius (enable features in phases)
+- Terraform configuration structured for maintainability and reuse (modules + envs)
 
 ---
 
 ## 🧹 Cleanup
 
-All infrastructure can be removed safely using:
-  terraform destroy
+All infrastructure can be removed safely with:
+```text
+terraform destroy
+
+This project avoids hidden dependencies and is designed to teardown cleanly.
 
 ---
 
 ## 📎 Notes
 
-This project is part of a cloud engineering portfolio and intentionally favors:
+This repository is part of a cloud engineering portfolio and intentionally prioritizes:
 - clarity over complexity
 - correctness over shortcuts
 - realism over “toy” examples
+- Design decisions reflect real-world AWS tradeoffs rather than tutorial-style shortcuts.
