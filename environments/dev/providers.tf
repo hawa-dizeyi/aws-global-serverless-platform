@@ -39,3 +39,17 @@ provider "aws" {
     }
   }
 }
+
+provider "aws" {
+  alias   = "primary"
+  region  = var.primary_region
+  profile = var.aws_profile
+
+  default_tags {
+    tags = {
+      Project     = var.project_name
+      Environment = var.environment
+      ManagedBy   = "Terraform"
+    }
+  }
+}

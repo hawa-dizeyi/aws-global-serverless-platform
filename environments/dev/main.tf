@@ -196,7 +196,6 @@ locals {
   }
 }
 
-
 resource "aws_route53_record" "api_acm_cert_validation" {
   for_each = local.acm_validation_records
 
@@ -340,6 +339,163 @@ resource "aws_route53_record" "api_latency_secondary_aaaa" {
   latency_routing_policy {
     region = var.secondary_region
   }
+
+  alias {
+    name                   = aws_apigatewayv2_domain_name.api_secondary[0].domain_name_configuration[0].target_domain_name
+    zone_id                = aws_apigatewayv2_domain_name.api_secondary[0].domain_name_configuration[0].hosted_zone_id
+    evaluate_target_health = false
+  }
+}
+
+#############################################
+# Step 1.2 — Regional DNS + Health Checks
+#############################################
+
+# Regional FQDNs used ONLY for health checks
+locals {
+  regional_eu_fqdn = "eu.${local.api_fqdn}"
+  regional_de_fqdn = "de.${local.api_fqdn}"
+}
+
+#############################################
+# Block A — Regional Alias Records
+#############################################
+
+resource "aws_route53_record" "api_regional_eu_a" {
+  zone_id = aws_route53_zone.public.zone_id
+  name    = local.regional_eu_fqdn
+  type    = "A"
+
+  alias {
+    name                   = aws_apigatewayv2_domain_name.api_primary[0].domain_name_configuration[0].target_domain_name
+    zone_id                = aws_apigatewayv2_domain_name.api_primary[0].domain_name_configuration[0].hosted_zone_id
+    evaluate_target_health = false
+  }
+}
+
+resource "aws_route53_record" "api_regional_de_a" {
+  zone_id = aws_route53_zone.public.zone_id
+  name    = local.regional_de_fqdn
+  type    = "A"
+
+  alias {
+    name                   = aws_apigatewayv2_domain_name.api_secondary[0].domain_name_configuration[0].target_domain_name
+    zone_id                = aws_apigatewayv2_domain_name.api_secondary[0].domain_name_configuration[0].hosted_zone_id
+    evaluate_target_health = false
+  }
+}
+
+#############################################
+# Block B — Route 53 Health Checks (Feature-Flagged)
+# Use execute-api hostnames to avoid TLS/SAN mismatch on eu.api/de.api
+#############################################
+
+locals {
+  # module.api_* outputs are like "https://xxxx.execute-api.region.amazonaws.com"
+  api_primary_execute_api_host   = replace(replace(module.api_primary.api_endpoint, "https://", ""), "/", "")
+  api_secondary_execute_api_host = replace(replace(module.api_secondary.api_endpoint, "https://", ""), "/", "")
+}
+
+resource "aws_route53_health_check" "hc_eu" {
+  count             = var.enable_r53_health_checks ? 1 : 0
+  fqdn              = local.api_primary_execute_api_host
+  port              = 443
+  type              = "HTTPS"
+  resource_path     = "/health"
+  request_interval  = 30
+  failure_threshold = 3
+}
+
+resource "aws_route53_health_check" "hc_de" {
+  count             = var.enable_r53_health_checks ? 1 : 0
+  fqdn              = local.api_secondary_execute_api_host
+  port              = 443
+  type              = "HTTPS"
+  resource_path     = "/health"
+  request_interval  = 30
+  failure_threshold = 3
+}
+
+#############################################
+# Step 1.3 — Route 53 Failover Records (Option A)
+#############################################
+
+resource "aws_route53_record" "api_failover_primary_a" {
+  count   = var.enable_r53_health_checks ? 1 : 0
+  zone_id = aws_route53_zone.public.zone_id
+  name    = local.api_fqdn
+  type    = "A"
+
+  set_identifier = "primary-eu-west-1"
+
+  failover_routing_policy {
+    type = "PRIMARY"
+  }
+
+  health_check_id = aws_route53_health_check.hc_eu[0].id
+
+  alias {
+    name                   = aws_apigatewayv2_domain_name.api_primary[0].domain_name_configuration[0].target_domain_name
+    zone_id                = aws_apigatewayv2_domain_name.api_primary[0].domain_name_configuration[0].hosted_zone_id
+    evaluate_target_health = false
+  }
+}
+
+resource "aws_route53_record" "api_failover_secondary_a" {
+  count   = var.enable_r53_health_checks ? 1 : 0
+  zone_id = aws_route53_zone.public.zone_id
+  name    = local.api_fqdn
+  type    = "A"
+
+  set_identifier = "secondary-eu-central-1"
+
+  failover_routing_policy {
+    type = "SECONDARY"
+  }
+
+  health_check_id = aws_route53_health_check.hc_de[0].id
+
+  alias {
+    name                   = aws_apigatewayv2_domain_name.api_secondary[0].domain_name_configuration[0].target_domain_name
+    zone_id                = aws_apigatewayv2_domain_name.api_secondary[0].domain_name_configuration[0].hosted_zone_id
+    evaluate_target_health = false
+  }
+}
+
+resource "aws_route53_record" "api_failover_primary_aaaa" {
+  count   = var.enable_r53_health_checks ? 1 : 0
+  zone_id = aws_route53_zone.public.zone_id
+  name    = local.api_fqdn
+  type    = "AAAA"
+
+  set_identifier = "primary-eu-west-1-aaaa"
+
+  failover_routing_policy {
+    type = "PRIMARY"
+  }
+
+  health_check_id = aws_route53_health_check.hc_eu[0].id
+
+  alias {
+    name                   = aws_apigatewayv2_domain_name.api_primary[0].domain_name_configuration[0].target_domain_name
+    zone_id                = aws_apigatewayv2_domain_name.api_primary[0].domain_name_configuration[0].hosted_zone_id
+    evaluate_target_health = false
+  }
+}
+
+resource "aws_route53_record" "api_failover_secondary_aaaa" {
+  count   = var.enable_r53_health_checks ? 1 : 0
+  zone_id = aws_route53_zone.public.zone_id
+  name    = local.api_fqdn
+  type    = "AAAA"
+
+  set_identifier = "secondary-eu-central-1-aaaa"
+
+  failover_routing_policy {
+    type = "SECONDARY"
+  }
+
+  health_check_id = aws_route53_health_check.hc_de[0].id
 
   alias {
     name                   = aws_apigatewayv2_domain_name.api_secondary[0].domain_name_configuration[0].target_domain_name
