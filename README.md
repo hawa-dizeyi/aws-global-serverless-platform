@@ -31,7 +31,7 @@ The platform is **multi-region (active-active)**, highly available, cost-aware, 
 
 ---
 
-## 🏗️ Architecture (Current State)
+## 🏗️ Architecture
 
 ### 1️⃣ Infrastructure Foundation
 
@@ -90,18 +90,54 @@ The platform is **multi-region (active-active)**, highly available, cost-aware, 
 
 ---
 
-### 5️⃣ Global Traffic Management — Route 53 (Latency-Based Routing)
+### 5️⃣ Global Traffic Management — Route 53 (Failover Routing)
 
 - Public hosted zone for real domain: **hawser-labs.online**
 - Subdomain: **api.hawser-labs.online**
-- Active-active latency routing:
-  - `A` records (IPv4) for Ireland + Frankfurt
-  - `AAAA` records (IPv6) for Ireland + Frankfurt
+- Health-check based **failover routing**:
+  - **PRIMARY** → eu-west-1 (Ireland)
+  - **SECONDARY** → eu-central-1 (Frankfurt)
 - Alias records point to regional API Gateway custom domains
-- Clients are routed to the lowest-latency region automatically
-- Health-check routing is available but feature-flagged
+- Route 53 automatically removes unhealthy regions from DNS responses
+- Zero manual intervention required during failure
 
 📸 Screenshots: `screenshots/route53/`
+
+---
+
+## 🧪 Regional Isolation & Active-Active Replication (Proof)
+
+This section provides **verifiable proof** that the platform operates as a **true active-active system**, with **independent regional execution** and **asynchronous global data replication**.
+
+### 1️⃣ Regional Compute Isolation
+
+Each region serves traffic independently, without cross-region runtime dependencies.
+
+📸 Proof:
+- `screenshots/dynamodb/regional-health-eu.png`
+- `screenshots/dynamodb/regional-health-de.png`
+
+---
+
+### 2️⃣ Independent Regional Writes (Active-Active)
+
+Each region can accept write traffic locally and persist data without relying on the other region.
+
+📸 Proof:
+- `screenshots/dynamodb/write-eu-output.png`
+- `screenshots/dynamodb/write-de-output.png`
+
+---
+
+### 3️⃣ Global Data Replication (DynamoDB Global Tables)
+
+DynamoDB Global Tables asynchronously replicate data between regions.
+
+Replication status is confirmed directly from DynamoDB metadata in both regions.
+
+📸 Proof:
+- `screenshots/dynamodb/replication-proof-describe-eu.png`
+- `screenshots/dynamodb/replication-proof-describe-de.png`
 
 ---
 
@@ -118,7 +154,7 @@ The platform is **multi-region (active-active)**, highly available, cost-aware, 
 
 ## 📁 Repository Structure
 
-```text
+~~~text
 .
 ├── environments/
 │   └── dev/
@@ -141,6 +177,7 @@ The platform is **multi-region (active-active)**, highly available, cost-aware, 
 │   ├── api-gateway/
 │   └── route53/
 └── README.md
+~~~
 
 ---
 
@@ -148,7 +185,7 @@ The platform is **multi-region (active-active)**, highly available, cost-aware, 
 
 - Designed for failure by default (no single-region dependency)
 - True active-active architecture with independent regional stacks
-- DNS-based traffic steering via Route 53 latency routing
+- Health-check driven DNS failover using Route 53
 - Global replication handled by DynamoDB Global Tables (not custom code)
 - Cost-aware defaults: no NAT/EC2, short log retention, feature flags
 - Incremental rollout with low blast radius (enable features in phases)
@@ -159,8 +196,10 @@ The platform is **multi-region (active-active)**, highly available, cost-aware, 
 ## 🧹 Cleanup
 
 All infrastructure can be removed safely with:
-```text
+
+~~~text
 terraform destroy
+~~~
 
 This project avoids hidden dependencies and is designed to teardown cleanly.
 
@@ -172,4 +211,5 @@ This repository is part of a cloud engineering portfolio and intentionally prior
 - clarity over complexity
 - correctness over shortcuts
 - realism over “toy” examples
-- Design decisions reflect real-world AWS tradeoffs rather than tutorial-style shortcuts.
+
+Design decisions reflect real-world AWS tradeoffs rather than tutorial-style shortcuts.
