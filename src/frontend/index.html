@@ -2,36 +2,126 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Hawser Labs — Global Serverless Platform</title>
+
     <style>
-      body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; max-width: 900px; margin: 48px auto; padding: 0 16px; }
-      .card { border: 1px solid #e5e7eb; border-radius: 16px; padding: 20px; margin: 16px 0; }
-      button { padding: 10px 14px; border-radius: 12px; border: 1px solid #111827; background: #111827; color: white; cursor: pointer; }
-      pre { background: #f3f4f6; padding: 10px; border-radius: 12px; overflow:auto; }
-      small { color: #6b7280; }
+      :root {
+        --bg: #0f1115;          /* ChatGPT-like dark background */
+        --card: #151a21;
+        --border: #262b36;
+        --text: #e5e7eb;
+        --muted: #9ca3af;
+        --accent: #10a37f;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+        max-width: 960px;
+        margin: 48px auto;
+        padding: 0 20px;
+      }
+
+      h1 {
+        font-size: 2.2rem;
+        margin-bottom: 0.5rem;
+      }
+
+      h2 {
+        font-size: 1.2rem;
+        margin-bottom: 0.75rem;
+      }
+
+      p {
+        line-height: 1.6;
+      }
+
+      .card {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        padding: 22px;
+        margin: 20px 0;
+      }
+
+      .muted {
+        color: var(--muted);
+      }
+
+      button {
+        appearance: none;
+        border: 1px solid var(--border);
+        background: #0b1220;
+        color: var(--text);
+        padding: 10px 16px;
+        border-radius: 12px;
+        cursor: pointer;
+        font-size: 0.95rem;
+        font-weight: 500;
+      }
+
+      button:hover {
+        border-color: var(--accent);
+        color: var(--accent);
+      }
+
+      pre {
+        margin-top: 14px;
+        background: #0b1220;
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 14px;
+        overflow-x: auto;
+        font-size: 0.85rem;
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+
+      footer {
+        margin-top: 40px;
+        text-align: center;
+        color: var(--muted);
+        font-size: 0.8rem;
+      }
     </style>
   </head>
+
   <body>
     <h1>Hawser Labs</h1>
+
     <div class="card">
       <p>
-        Multi-region (active-active) serverless backend on AWS (Terraform).<br/>
-        <small>This UI is hosted publicly and calls the API using strict CORS.</small>
+        <strong>Global Serverless Platform (Active-Active)</strong><br />
+        Multi-region AWS backend built with Terraform.
+      </p>
+      <p class="muted">
+        This UI is hosted publicly on Vercel and calls the API using
+        <strong>strict CORS</strong>.
       </p>
     </div>
 
     <div class="card">
       <h2>API Health</h2>
       <button onclick="checkHealth()">GET /health</button>
-      <pre id="health"></pre>
+      <pre id="health">Click the button to query the API</pre>
     </div>
 
     <div class="card">
       <h2>Write Demo</h2>
       <button onclick="writeDemo()">POST /write</button>
-      <pre id="write"></pre>
+      <pre id="write">Click the button to write data</pre>
     </div>
+
+    <footer>
+      © Hawser Labs — AWS Global Serverless Portfolio
+    </footer>
 
     <script>
       const API_BASE = "https://api.hawser-labs.online";
@@ -39,19 +129,27 @@
       async function checkHealth() {
         const el = document.getElementById("health");
         el.textContent = "Loading...";
-        const res = await fetch(`${API_BASE}/health`);
-        el.textContent = await res.text();
+        try {
+          const res = await fetch(`${API_BASE}/health`);
+          el.textContent = await res.text();
+        } catch (err) {
+          el.textContent = "Error: " + err.message;
+        }
       }
 
       async function writeDemo() {
         const el = document.getElementById("write");
         el.textContent = "Loading...";
-        const res = await fetch(`${API_BASE}/write`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ pk: "demo" })
-        });
-        el.textContent = await res.text();
+        try {
+          const res = await fetch(`${API_BASE}/write`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ pk: "demo" })
+          });
+          el.textContent = await res.text();
+        } catch (err) {
+          el.textContent = "Error: " + err.message;
+        }
       }
     </script>
   </body>
