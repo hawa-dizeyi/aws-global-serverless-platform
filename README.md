@@ -2,17 +2,17 @@
 
 This project demonstrates the design and implementation of a **globally distributed, serverless backend on AWS**, built with **Terraform** and following **production-grade cloud engineering practices**.
 
-The platform is **multi-region (active-active)**, highly available, cost-aware, and designed for **zero-downtime regional resilience** using DNS-based traffic steering.
+The platform is **multi-region (active-active)**, highly available, cost-aware, and designed for **zero-downtime regional resilience** using DNS-based traffic steering and health-check–driven failover.
 
 ---
 
 ## 🎯 Project Goals
 
 - Build a **multi-region serverless backend** using AWS native services
-- Demonstrate **active-active architecture** across regions
+- Demonstrate **true active-active architecture** across regions
 - Implement infrastructure as code with **Terraform**
 - Apply **cost controls and safe defaults**
-- Produce clear documentation and deployment proof suitable for a professional portfolio
+- Produce **verifiable deployment proof** suitable for a senior-level portfolio
 
 ---
 
@@ -26,21 +26,21 @@ The platform is **multi-region (active-active)**, highly available, cost-aware, 
 **Why this pairing:**
 - Low latency for EU users
 - Strong regional separation
-- Common real-world production pairing in Europe
+- Common real-world production pairing
 - Full service parity for serverless workloads
 
 ---
 
-## 🏗️ Architecture
+## 🏗️ Architecture (Current State)
 
 ### 1️⃣ Infrastructure Foundation
 
 - Terraform multi-provider setup
-- Explicit primary/secondary provider aliasing
+- Explicit primary / secondary provider aliasing
 - Environment-scoped configuration (`environments/dev`)
 - Centralized naming and tagging strategy
 - Feature flags for optional services (CloudFront, WAF, Route 53 health checks)
-- Safe defaults to reduce accidental cost/blast radius
+- Safe defaults to reduce accidental cost or blast radius
 
 ---
 
@@ -51,9 +51,10 @@ The platform is **multi-region (active-active)**, highly available, cost-aware, 
   - eu-central-1
 - `PAY_PER_REQUEST` billing (no capacity planning)
 - TTL enabled for automatic cleanup of test data
-- DynamoDB Streams enabled (required for global replication)
+- DynamoDB Streams enabled for global replication
 
-**Result:** Writes in one region automatically replicate to the other.
+**Result:**  
+Writes in one region automatically replicate to the other without custom code.
 
 📸 Screenshots: `screenshots/dynamodb/`
 
@@ -61,7 +62,7 @@ The platform is **multi-region (active-active)**, highly available, cost-aware, 
 
 ### 3️⃣ Compute Layer — AWS Lambda (Multi-Region)
 
-- Identical Lambda functions deployed in both regions
+- Identical Lambda functions deployed independently in both regions
 - Runtime: **Python 3.12**
 - ZIP-based deployment using Terraform (`archive_file`)
 - Shared execution role with **least-privilege** DynamoDB access
@@ -78,66 +79,92 @@ The platform is **multi-region (active-active)**, highly available, cost-aware, 
 
 ### 4️⃣ API Layer — API Gateway (Active-Active)
 
-- HTTP API Gateway deployed independently in both regions
+- HTTP API Gateway deployed independently per region
 - Regional APIs integrated with regional Lambdas
-- Identical routes in each region:
-  - `GET /health`
-  - `POST /write`
-- Throttling + safe defaults enabled
-- Regions are decoupled (no cross-region dependency)
+- Identical routes in each region
+- Throttling and safe defaults enabled
+- No cross-region dependencies
 
 📸 Screenshots: `screenshots/api-gateway/`
 
 ---
 
-### 5️⃣ Global Traffic Management — Route 53 (Failover Routing)
+### 5️⃣ Global Traffic Management — Route 53 (Failover + Health Checks)
 
-- Public hosted zone for real domain: **hawser-labs.online**
-- Subdomain: **api.hawser-labs.online**
-- Health-check based **failover routing**:
-  - **PRIMARY** → eu-west-1 (Ireland)
-  - **SECONDARY** → eu-central-1 (Frankfurt)
-- Alias records point to regional API Gateway custom domains
-- Route 53 automatically removes unhealthy regions from DNS responses
-- Zero manual intervention required during failure
+- Public hosted zone: **hawser-labs.online**
+- API subdomain: **api.hawser-labs.online**
+- **Failover routing policy** (PRIMARY / SECONDARY)
+- HTTPS health checks against `/health` per region
+- Automatic removal of unhealthy region from DNS
+- IPv4 (`A`) and IPv6 (`AAAA`) records
 
 📸 Screenshots: `screenshots/route53/`
 
 ---
 
-## 🧪 Regional Isolation & Active-Active Replication (Proof)
+## 🔁 Regional Isolation & Active-Active Replication (Proof)
 
-This section provides **verifiable proof** that the platform operates as a **true active-active system**, with **independent regional execution** and **asynchronous global data replication**.
+This section provides **explicit, reproducible proof** of active-active behavior and regional isolation.
 
-### 1️⃣ Regional Compute Isolation
+### ✅ Independent Regional Health
 
-Each region serves traffic independently, without cross-region runtime dependencies.
+Each region responds independently:
 
-📸 Proof:
+- eu-west-1 reports `region: eu-west-1`
+- eu-central-1 reports `region: eu-central-1`
+
+📸 Evidence:
 - `screenshots/dynamodb/regional-health-eu.png`
 - `screenshots/dynamodb/regional-health-de.png`
 
 ---
 
-### 2️⃣ Independent Regional Writes (Active-Active)
+### ✅ Cross-Region Data Replication
 
-Each region can accept write traffic locally and persist data without relying on the other region.
+1. Write executed in **Ireland**
+2. Item read from **Frankfurt**
+3. Write executed in **Frankfurt**
+4. Item read from **Ireland**
 
-📸 Proof:
+Replication is handled entirely by DynamoDB Global Tables.
+
+📸 Evidence:
 - `screenshots/dynamodb/write-eu-output.png`
+- `screenshots/dynamodb/get-from-de-eu-item.png`
 - `screenshots/dynamodb/write-de-output.png`
+- `screenshots/dynamodb/get-from-eu-de-item.png`
 
 ---
 
-### 3️⃣ Global Data Replication (DynamoDB Global Tables)
+### ✅ Automated Failover (Controlled Failure)
 
-DynamoDB Global Tables asynchronously replicate data between regions.
+- Health check intentionally failed for PRIMARY (eu-west-1)
+- Route 53 marked PRIMARY as unhealthy
+- DNS automatically routed traffic to SECONDARY (eu-central-1)
+- No client-side changes required
 
-Replication status is confirmed directly from DynamoDB metadata in both regions.
+📸 Evidence:
+- `screenshots/route53/failover-routing.png`
+- `screenshots/route53/primary-unhealthy.png`
 
-📸 Proof:
-- `screenshots/dynamodb/replication-proof-describe-eu.png`
-- `screenshots/dynamodb/replication-proof-describe-de.png`
+---
+
+### ✅ Frontend Validation (CORS + Visibility)
+
+A minimal public UI is hosted on **Vercel** (`ui.hawser-labs.online`) to:
+
+- Justify **strict CORS** configuration
+- Visualize routing decisions
+- Display:
+  - Region badge
+  - Request latency
+  - Failover detection banner
+  - Animated response cards
+
+📸 Evidence:
+- `screenshots/frontend/frontend-global-health.png`
+- `screenshots/frontend/frontend-latency.png`
+- `screenshots/frontend/frontend-failover-banner.png`
 
 ---
 
@@ -147,6 +174,7 @@ Replication status is confirmed directly from DynamoDB metadata in both regions.
 - IAM least-privilege policies
 - No EC2, NAT Gateways, or always-on infrastructure
 - Short log retention across services
+- Strict CORS (no wildcard origins)
 - Feature-flagged edge services (CloudFront, WAF)
 - Clean, reproducible Terraform state
 
@@ -175,7 +203,8 @@ Replication status is confirmed directly from DynamoDB metadata in both regions.
 │   ├── dynamodb/
 │   ├── lambda/
 │   ├── api-gateway/
-│   └── route53/
+│   ├── route53/
+│   └── frontend/
 └── README.md
 ~~~
 
