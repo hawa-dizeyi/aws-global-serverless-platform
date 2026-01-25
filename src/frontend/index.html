@@ -22,10 +22,11 @@
 
       body {
         margin: 0;
-        background: var(--bg);
+        background: radial-gradient(1200px 700px at 50% 0%, rgba(16, 163, 127, 0.06), transparent 55%),
+                    var(--bg);
         color: var(--text);
         font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
-        max-width: 980px;
+        max-width: 1040px;
         margin: 48px auto;
         padding: 0 20px;
       }
@@ -47,7 +48,8 @@
       .subtitle {
         margin-top: 8px;
         color: var(--muted);
-        line-height: 1.5;
+        line-height: 1.55;
+        max-width: 640px;
       }
 
       .chips {
@@ -70,8 +72,7 @@
         color: var(--text);
         transition: transform 200ms ease, border-color 200ms ease;
       }
-
-      .chip strong { font-weight: 600; }
+      .chip strong { font-weight: 650; }
       .chip:hover { transform: translateY(-1px); border-color: #334155; }
 
       .dot {
@@ -80,7 +81,6 @@
         border-radius: 999px;
         background: var(--muted);
       }
-
       .dot.ok { background: var(--accent); }
       .dot.warn { background: var(--warn); }
       .dot.bad { background: var(--danger); }
@@ -97,31 +97,28 @@
         opacity: 0;
         animation: bannerIn 260ms ease forwards;
       }
-
-      @keyframes bannerIn {
-        to { transform: translateY(0); opacity: 1; }
-      }
+      @keyframes bannerIn { to { transform: translateY(0); opacity: 1; } }
 
       .grid {
         display: grid;
         grid-template-columns: 1fr;
         gap: 18px;
       }
-
-      @media (min-width: 920px) {
+      @media (min-width: 940px) {
         .grid { grid-template-columns: 1fr 1fr; }
       }
 
       .card {
-        background: var(--card);
+        background: linear-gradient(180deg, rgba(255,255,255,0.02), transparent 35%),
+                    var(--card);
         border: 1px solid var(--border);
-        border-radius: 16px;
+        border-radius: 18px;
         padding: 22px;
         animation: cardIn 260ms ease both;
+        box-shadow: 0 8px 28px rgba(0,0,0,0.35);
       }
-
       @keyframes cardIn {
-        from { transform: translateY(8px); opacity: 0.0; }
+        from { transform: translateY(10px); opacity: 0.0; }
         to { transform: translateY(0); opacity: 1; }
       }
 
@@ -156,9 +153,28 @@
         border: 1px solid var(--border);
         background: #0b1220;
       }
-
       .pill .label { color: var(--muted); }
-      .pill .value { color: var(--text); font-weight: 600; }
+      .pill .value { color: var(--text); font-weight: 650; }
+
+      .controls {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        flex-wrap: wrap;
+        margin-top: 10px;
+      }
+
+      select {
+        background: #0b1220;
+        border: 1px solid var(--border);
+        color: var(--text);
+        padding: 10px 12px;
+        border-radius: 12px;
+        font-weight: 600;
+        cursor: pointer;
+        outline: none;
+      }
+      select:hover { border-color: #334155; }
 
       button {
         appearance: none;
@@ -169,16 +185,14 @@
         border-radius: 12px;
         cursor: pointer;
         font-size: 0.95rem;
-        font-weight: 600;
+        font-weight: 650;
         transition: transform 180ms ease, border-color 180ms ease, color 180ms ease;
       }
-
       button:hover {
         transform: translateY(-1px);
         border-color: var(--accent);
         color: var(--accent);
       }
-
       button:disabled {
         opacity: 0.6;
         cursor: not-allowed;
@@ -200,13 +214,10 @@
         transition: border-color 220ms ease;
       }
 
-      .pulse {
-        animation: pulse 320ms ease;
-      }
-
+      .pulse { animation: pulse 320ms ease; }
       @keyframes pulse {
         0% { transform: scale(1.0); }
-        50% { transform: scale(1.01); }
+        50% { transform: scale(1.012); }
         100% { transform: scale(1.0); }
       }
 
@@ -219,6 +230,13 @@
 
       a { color: var(--accent); text-decoration: none; }
       a:hover { text-decoration: underline; }
+
+      code {
+        background: rgba(255,255,255,0.06);
+        padding: 2px 6px;
+        border-radius: 8px;
+        border: 1px solid rgba(255,255,255,0.10);
+      }
     </style>
   </head>
 
@@ -228,7 +246,8 @@
         <h1>Hawser Labs</h1>
         <div class="subtitle">
           Global serverless platform (active-active) on AWS (Terraform).<br />
-          UI hosted publicly (Vercel) to justify <strong>strict CORS</strong>.
+          UI hosted publicly (Vercel) to justify <strong>strict CORS</strong>.<br />
+          Routing demo: <code>Global</code> uses <code>api.hawser-labs.online</code>, while <code>Force EU/DE</code> calls the regional API endpoints directly.
         </div>
       </div>
 
@@ -244,12 +263,36 @@
           <span>Latency:</span>
           <strong id="latencyBadge">—</strong>
         </div>
+
+        <div class="chip" title="Which endpoint the UI is calling">
+          <span class="dot warn" id="modeDot"></span>
+          <span>Mode:</span>
+          <strong id="modeBadge">Global</strong>
+        </div>
       </div>
     </div>
 
     <div class="banner" id="failoverBanner">
       <strong>Failover detected:</strong>
       Region changed from <span id="fromRegion"></span> to <span id="toRegion"></span>.
+    </div>
+
+    <div class="card">
+      <div class="row">
+        <div class="meta">
+          <span class="pill"><span class="label">UI Origin</span><span class="value" id="uiOrigin">—</span></span>
+          <span class="pill"><span class="label">API Base</span><span class="value" id="apiBaseShown">—</span></span>
+        </div>
+
+        <div class="controls">
+          <select id="routingMode" onchange="onModeChange()">
+            <option value="global">Global (api.hawser-labs.online)</option>
+            <option value="eu">Force EU (eu-west-1)</option>
+            <option value="de">Force DE (eu-central-1)</option>
+          </select>
+          <button onclick="checkHealth()">Refresh health</button>
+        </div>
+      </div>
     </div>
 
     <div class="grid">
@@ -269,7 +312,7 @@
           </div>
         </div>
 
-        <pre id="healthOut">Click the button to query the API.</pre>
+        <pre id="healthOut">Auto-check will run on page load.</pre>
       </div>
 
       <div class="card" id="cardWrite">
@@ -288,7 +331,7 @@
           </div>
         </div>
 
-        <pre id="writeOut">Click the button to write data.</pre>
+        <pre id="writeOut">Use Global/Force EU/Force DE to demonstrate routing behavior.</pre>
       </div>
     </div>
 
@@ -298,9 +341,38 @@
     </footer>
 
     <script>
-      const API_BASE = "https://api.hawser-labs.online";
+      // Global base (Route53 failover record)
+      const API_GLOBAL = "https://api.hawser-labs.online";
+
+      // Regional execute-api endpoints (these have valid TLS certs for their own hostnames)
+      // From your terraform outputs:
+      const API_EU = "https://9t5g9caak1.execute-api.eu-west-1.amazonaws.com";
+      const API_DE = "https://gzntc11016.execute-api.eu-central-1.amazonaws.com";
 
       let lastRegion = null;
+
+      function currentBase() {
+        const mode = document.getElementById("routingMode").value;
+        if (mode === "eu") return API_EU;
+        if (mode === "de") return API_DE;
+        return API_GLOBAL;
+      }
+
+      function setModeBadge(mode) {
+        const badge = document.getElementById("modeBadge");
+        const dot = document.getElementById("modeDot");
+
+        if (mode === "eu") {
+          badge.textContent = "Force EU";
+          dot.className = "dot ok";
+        } else if (mode === "de") {
+          badge.textContent = "Force DE";
+          dot.className = "dot ok";
+        } else {
+          badge.textContent = "Global";
+          dot.className = "dot warn";
+        }
+      }
 
       function setRegionBadge(region) {
         const badge = document.getElementById("regionBadge");
@@ -318,10 +390,8 @@
         document.getElementById("toRegion").textContent = to || "unknown";
 
         banner.style.display = "block";
-        // retrigger animation
         banner.style.animation = "none";
-        // eslint-disable-next-line no-unused-expressions
-        banner.offsetHeight;
+        banner.offsetHeight; // retrigger
         banner.style.animation = "";
       }
 
@@ -352,7 +422,23 @@
         el.classList.add("pulse");
       }
 
+      function updateBaseUI() {
+        const base = currentBase();
+        document.getElementById("apiBaseShown").textContent = base.replace("https://", "");
+        document.getElementById("uiOrigin").textContent = window.location.origin;
+
+        const mode = document.getElementById("routingMode").value;
+        setModeBadge(mode);
+      }
+
+      function onModeChange() {
+        updateBaseUI();
+        // Force a health refresh when mode changes so badges update immediately
+        checkHealth();
+      }
+
       async function checkHealth() {
+        const base = currentBase();
         const btn = document.getElementById("btnHealth");
         const out = document.getElementById("healthOut");
         const statusEl = document.getElementById("healthStatus");
@@ -360,12 +446,12 @@
         const card = document.getElementById("cardHealth");
 
         btn.disabled = true;
-        out.textContent = "Loading...";
+        out.textContent = `Loading...\nRequesting: ${base}/health`;
         statusEl.textContent = "…";
         latEl.textContent = "…";
 
         try {
-          const { res, ms } = await fetchWithTiming(`${API_BASE}/health`, { method: "GET" });
+          const { res, ms } = await fetchWithTiming(`${base}/health`, { method: "GET" });
           const text = await res.text();
 
           statusEl.textContent = String(res.status);
@@ -389,18 +475,22 @@
               showFailover(lastRegion, region);
             }
             lastRegion = region;
+          } else {
+            setRegionBadge(null);
           }
         } catch (err) {
           statusEl.textContent = "ERR";
           latEl.textContent = "—";
           out.textContent = "Error: " + (err && err.message ? err.message : String(err));
           pulse(card);
+          setRegionBadge(null);
         } finally {
           btn.disabled = false;
         }
       }
 
       async function writeDemo() {
+        const base = currentBase();
         const btn = document.getElementById("btnWrite");
         const out = document.getElementById("writeOut");
         const statusEl = document.getElementById("writeStatus");
@@ -408,12 +498,12 @@
         const card = document.getElementById("cardWrite");
 
         btn.disabled = true;
-        out.textContent = "Loading...";
+        out.textContent = `Loading...\nRequesting: ${base}/write`;
         statusEl.textContent = "…";
         latEl.textContent = "…";
 
         try {
-          const { res, ms } = await fetchWithTiming(`${API_BASE}/write`, {
+          const { res, ms } = await fetchWithTiming(`${base}/write`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ pk: "demo" })
@@ -428,7 +518,7 @@
           out.textContent = prettyJson(text);
           pulse(card);
 
-          // if response contains region, update badge + failover banner
+          // infer region from JSON
           let region = null;
           try {
             const obj = JSON.parse(text);
@@ -453,8 +543,12 @@
         }
       }
 
-      // Initial UI state
-      setRegionBadge(null);
+      // Init: set mode UI + auto-run health once
+      document.addEventListener("DOMContentLoaded", async () => {
+        setRegionBadge(null);
+        updateBaseUI();
+        await checkHealth();
+      });
     </script>
   </body>
 </html>
