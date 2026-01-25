@@ -7,40 +7,109 @@
 
     <style>
       :root {
-        --bg: #0f1115;          /* ChatGPT-like dark background */
+        --bg: #0f1115;
         --card: #151a21;
         --border: #262b36;
         --text: #e5e7eb;
         --muted: #9ca3af;
         --accent: #10a37f;
+        --warn: #f59e0b;
+        --danger: #ef4444;
+        --chip: #0b1220;
       }
 
-      * {
-        box-sizing: border-box;
-      }
+      * { box-sizing: border-box; }
 
       body {
         margin: 0;
         background: var(--bg);
         color: var(--text);
         font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
-        max-width: 960px;
+        max-width: 980px;
         margin: 48px auto;
         padding: 0 20px;
       }
 
+      .topbar {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 18px;
+      }
+
       h1 {
         font-size: 2.2rem;
-        margin-bottom: 0.5rem;
+        margin: 0;
+        letter-spacing: -0.02em;
       }
 
-      h2 {
-        font-size: 1.2rem;
-        margin-bottom: 0.75rem;
+      .subtitle {
+        margin-top: 8px;
+        color: var(--muted);
+        line-height: 1.5;
       }
 
-      p {
-        line-height: 1.6;
+      .chips {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+      }
+
+      .chip {
+        display: inline-flex;
+        gap: 8px;
+        align-items: center;
+        background: var(--chip);
+        border: 1px solid var(--border);
+        padding: 8px 12px;
+        border-radius: 999px;
+        font-size: 0.85rem;
+        color: var(--text);
+        transition: transform 200ms ease, border-color 200ms ease;
+      }
+
+      .chip strong { font-weight: 600; }
+      .chip:hover { transform: translateY(-1px); border-color: #334155; }
+
+      .dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 999px;
+        background: var(--muted);
+      }
+
+      .dot.ok { background: var(--accent); }
+      .dot.warn { background: var(--warn); }
+      .dot.bad { background: var(--danger); }
+
+      .banner {
+        background: rgba(245, 158, 11, 0.08);
+        border: 1px solid rgba(245, 158, 11, 0.35);
+        color: #fde68a;
+        padding: 12px 14px;
+        border-radius: 14px;
+        margin: 14px 0 18px;
+        display: none;
+        transform: translateY(-6px);
+        opacity: 0;
+        animation: bannerIn 260ms ease forwards;
+      }
+
+      @keyframes bannerIn {
+        to { transform: translateY(0); opacity: 1; }
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 18px;
+      }
+
+      @media (min-width: 920px) {
+        .grid { grid-template-columns: 1fr 1fr; }
       }
 
       .card {
@@ -48,12 +117,48 @@
         border: 1px solid var(--border);
         border-radius: 16px;
         padding: 22px;
-        margin: 20px 0;
+        animation: cardIn 260ms ease both;
       }
 
-      .muted {
-        color: var(--muted);
+      @keyframes cardIn {
+        from { transform: translateY(8px); opacity: 0.0; }
+        to { transform: translateY(0); opacity: 1; }
       }
+
+      .card h2 {
+        margin: 0 0 12px;
+        font-size: 1.15rem;
+      }
+
+      .row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        flex-wrap: wrap;
+      }
+
+      .meta {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        align-items: center;
+        color: var(--muted);
+        font-size: 0.85rem;
+      }
+
+      .pill {
+        display: inline-flex;
+        gap: 8px;
+        align-items: center;
+        padding: 6px 10px;
+        border-radius: 999px;
+        border: 1px solid var(--border);
+        background: #0b1220;
+      }
+
+      .pill .label { color: var(--muted); }
+      .pill .value { color: var(--text); font-weight: 600; }
 
       button {
         appearance: none;
@@ -64,93 +169,292 @@
         border-radius: 12px;
         cursor: pointer;
         font-size: 0.95rem;
-        font-weight: 500;
+        font-weight: 600;
+        transition: transform 180ms ease, border-color 180ms ease, color 180ms ease;
       }
 
       button:hover {
+        transform: translateY(-1px);
         border-color: var(--accent);
         color: var(--accent);
       }
 
+      button:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+        transform: none;
+        border-color: var(--border);
+        color: var(--muted);
+      }
+
       pre {
-        margin-top: 14px;
+        margin: 14px 0 0;
         background: #0b1220;
         border: 1px solid var(--border);
         border-radius: 12px;
         padding: 14px;
         overflow-x: auto;
-        font-size: 0.85rem;
+        font-size: 0.86rem;
         white-space: pre-wrap;
         word-break: break-word;
+        transition: border-color 220ms ease;
+      }
+
+      .pulse {
+        animation: pulse 320ms ease;
+      }
+
+      @keyframes pulse {
+        0% { transform: scale(1.0); }
+        50% { transform: scale(1.01); }
+        100% { transform: scale(1.0); }
       }
 
       footer {
-        margin-top: 40px;
+        margin: 38px 0 10px;
         text-align: center;
         color: var(--muted);
-        font-size: 0.8rem;
+        font-size: 0.82rem;
       }
+
+      a { color: var(--accent); text-decoration: none; }
+      a:hover { text-decoration: underline; }
     </style>
   </head>
 
   <body>
-    <h1>Hawser Labs</h1>
+    <div class="topbar">
+      <div>
+        <h1>Hawser Labs</h1>
+        <div class="subtitle">
+          Global serverless platform (active-active) on AWS (Terraform).<br />
+          UI hosted publicly (Vercel) to justify <strong>strict CORS</strong>.
+        </div>
+      </div>
 
-    <div class="card">
-      <p>
-        <strong>Global Serverless Platform (Active-Active)</strong><br />
-        Multi-region AWS backend built with Terraform.
-      </p>
-      <p class="muted">
-        This UI is hosted publicly on Vercel and calls the API using
-        <strong>strict CORS</strong>.
-      </p>
+      <div class="chips">
+        <div class="chip" title="Current region inferred from /health response">
+          <span class="dot" id="regionDot"></span>
+          <span>Region:</span>
+          <strong id="regionBadge">unknown</strong>
+        </div>
+
+        <div class="chip" title="Last measured round-trip latency">
+          <span class="dot ok"></span>
+          <span>Latency:</span>
+          <strong id="latencyBadge">—</strong>
+        </div>
+      </div>
     </div>
 
-    <div class="card">
-      <h2>API Health</h2>
-      <button onclick="checkHealth()">GET /health</button>
-      <pre id="health">Click the button to query the API</pre>
+    <div class="banner" id="failoverBanner">
+      <strong>Failover detected:</strong>
+      Region changed from <span id="fromRegion"></span> to <span id="toRegion"></span>.
     </div>
 
-    <div class="card">
-      <h2>Write Demo</h2>
-      <button onclick="writeDemo()">POST /write</button>
-      <pre id="write">Click the button to write data</pre>
+    <div class="grid">
+      <div class="card" id="cardHealth">
+        <div class="row">
+          <h2>API Health</h2>
+          <div class="meta">
+            <span class="pill"><span class="label">Route</span><span class="value">GET /health</span></span>
+          </div>
+        </div>
+
+        <div class="row" style="margin-top: 10px;">
+          <button id="btnHealth" onclick="checkHealth()">Run health check</button>
+          <div class="meta">
+            <span class="pill"><span class="label">Last status</span><span class="value" id="healthStatus">—</span></span>
+            <span class="pill"><span class="label">Latency</span><span class="value" id="healthLatency">—</span></span>
+          </div>
+        </div>
+
+        <pre id="healthOut">Click the button to query the API.</pre>
+      </div>
+
+      <div class="card" id="cardWrite">
+        <div class="row">
+          <h2>Write Demo</h2>
+          <div class="meta">
+            <span class="pill"><span class="label">Route</span><span class="value">POST /write</span></span>
+          </div>
+        </div>
+
+        <div class="row" style="margin-top: 10px;">
+          <button id="btnWrite" onclick="writeDemo()">Write a demo item</button>
+          <div class="meta">
+            <span class="pill"><span class="label">Last status</span><span class="value" id="writeStatus">—</span></span>
+            <span class="pill"><span class="label">Latency</span><span class="value" id="writeLatency">—</span></span>
+          </div>
+        </div>
+
+        <pre id="writeOut">Click the button to write data.</pre>
+      </div>
     </div>
 
     <footer>
-      © Hawser Labs — AWS Global Serverless Portfolio
+      API: <a href="https://api.hawser-labs.online/health" target="_blank" rel="noreferrer">api.hawser-labs.online</a>
+      • UI: <span class="muted">ui.hawser-labs.online</span>
     </footer>
 
     <script>
       const API_BASE = "https://api.hawser-labs.online";
 
-      async function checkHealth() {
-        const el = document.getElementById("health");
-        el.textContent = "Loading...";
+      let lastRegion = null;
+
+      function setRegionBadge(region) {
+        const badge = document.getElementById("regionBadge");
+        const dot = document.getElementById("regionDot");
+
+        badge.textContent = region || "unknown";
+
+        dot.classList.remove("ok", "warn", "bad");
+        dot.classList.add(region ? "ok" : "warn");
+      }
+
+      function showFailover(from, to) {
+        const banner = document.getElementById("failoverBanner");
+        document.getElementById("fromRegion").textContent = from || "unknown";
+        document.getElementById("toRegion").textContent = to || "unknown";
+
+        banner.style.display = "block";
+        // retrigger animation
+        banner.style.animation = "none";
+        // eslint-disable-next-line no-unused-expressions
+        banner.offsetHeight;
+        banner.style.animation = "";
+      }
+
+      function setGlobalLatency(ms) {
+        document.getElementById("latencyBadge").textContent = `${ms} ms`;
+      }
+
+      function prettyJson(text) {
         try {
-          const res = await fetch(`${API_BASE}/health`);
-          el.textContent = await res.text();
+          const obj = JSON.parse(text);
+          return JSON.stringify(obj, null, 2);
+        } catch {
+          return text;
+        }
+      }
+
+      async function fetchWithTiming(url, opts) {
+        const start = performance.now();
+        const res = await fetch(url, opts);
+        const end = performance.now();
+        const ms = Math.round(end - start);
+        return { res, ms };
+      }
+
+      function pulse(el) {
+        el.classList.remove("pulse");
+        void el.offsetWidth;
+        el.classList.add("pulse");
+      }
+
+      async function checkHealth() {
+        const btn = document.getElementById("btnHealth");
+        const out = document.getElementById("healthOut");
+        const statusEl = document.getElementById("healthStatus");
+        const latEl = document.getElementById("healthLatency");
+        const card = document.getElementById("cardHealth");
+
+        btn.disabled = true;
+        out.textContent = "Loading...";
+        statusEl.textContent = "…";
+        latEl.textContent = "…";
+
+        try {
+          const { res, ms } = await fetchWithTiming(`${API_BASE}/health`, { method: "GET" });
+          const text = await res.text();
+
+          statusEl.textContent = String(res.status);
+          latEl.textContent = `${ms} ms`;
+          setGlobalLatency(ms);
+
+          out.textContent = prettyJson(text);
+          pulse(card);
+
+          // infer region from JSON
+          let region = null;
+          try {
+            const obj = JSON.parse(text);
+            region = obj.region || null;
+          } catch {}
+
+          if (region) {
+            setRegionBadge(region);
+
+            if (lastRegion && lastRegion !== region) {
+              showFailover(lastRegion, region);
+            }
+            lastRegion = region;
+          }
         } catch (err) {
-          el.textContent = "Error: " + err.message;
+          statusEl.textContent = "ERR";
+          latEl.textContent = "—";
+          out.textContent = "Error: " + (err && err.message ? err.message : String(err));
+          pulse(card);
+        } finally {
+          btn.disabled = false;
         }
       }
 
       async function writeDemo() {
-        const el = document.getElementById("write");
-        el.textContent = "Loading...";
+        const btn = document.getElementById("btnWrite");
+        const out = document.getElementById("writeOut");
+        const statusEl = document.getElementById("writeStatus");
+        const latEl = document.getElementById("writeLatency");
+        const card = document.getElementById("cardWrite");
+
+        btn.disabled = true;
+        out.textContent = "Loading...";
+        statusEl.textContent = "…";
+        latEl.textContent = "…";
+
         try {
-          const res = await fetch(`${API_BASE}/write`, {
+          const { res, ms } = await fetchWithTiming(`${API_BASE}/write`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ pk: "demo" })
           });
-          el.textContent = await res.text();
+
+          const text = await res.text();
+
+          statusEl.textContent = String(res.status);
+          latEl.textContent = `${ms} ms`;
+          setGlobalLatency(ms);
+
+          out.textContent = prettyJson(text);
+          pulse(card);
+
+          // if response contains region, update badge + failover banner
+          let region = null;
+          try {
+            const obj = JSON.parse(text);
+            region = obj.item?.region || obj.region || null;
+          } catch {}
+
+          if (region) {
+            setRegionBadge(region);
+
+            if (lastRegion && lastRegion !== region) {
+              showFailover(lastRegion, region);
+            }
+            lastRegion = region;
+          }
         } catch (err) {
-          el.textContent = "Error: " + err.message;
+          statusEl.textContent = "ERR";
+          latEl.textContent = "—";
+          out.textContent = "Error: " + (err && err.message ? err.message : String(err));
+          pulse(card);
+        } finally {
+          btn.disabled = false;
         }
       }
+
+      // Initial UI state
+      setRegionBadge(null);
     </script>
   </body>
 </html>
