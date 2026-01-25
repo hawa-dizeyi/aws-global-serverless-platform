@@ -32,13 +32,6 @@ resource "aws_apigatewayv2_route" "write_post" {
   target    = "integrations/${aws_apigatewayv2_integration.lambda_proxy.id}"
 }
 
-# Optional convenience route (so you can test in browser quickly)
-resource "aws_apigatewayv2_route" "write_get" {
-  api_id    = aws_apigatewayv2_api.this.id
-  route_key = "GET /write"
-  target    = "integrations/${aws_apigatewayv2_integration.lambda_proxy.id}"
-}
-
 resource "aws_apigatewayv2_stage" "default" {
   api_id      = aws_apigatewayv2_api.this.id
   name        = local.stage_name
