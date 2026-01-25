@@ -124,6 +124,7 @@ module "api_primary" {
   api_suffix           = "primary"
   lambda_invoke_arn    = module.lambda_primary.invoke_arn
   lambda_function_name = module.lambda_primary.function_name
+  cors_allow_origins   = ["https://ui.hawser-labs.online"]
 
   log_retention_days   = 3
   throttle_rate_limit  = 5
@@ -139,6 +140,7 @@ module "api_secondary" {
   api_suffix           = "secondary"
   lambda_invoke_arn    = module.lambda_secondary.invoke_arn
   lambda_function_name = module.lambda_secondary.function_name
+  cors_allow_origins   = ["https://ui.hawser-labs.online"]
 
   log_retention_days   = 3
   throttle_rate_limit  = 5
@@ -502,4 +504,18 @@ resource "aws_route53_record" "api_failover_secondary_aaaa" {
     zone_id                = aws_apigatewayv2_domain_name.api_secondary[0].domain_name_configuration[0].hosted_zone_id
     evaluate_target_health = false
   }
+}
+
+module "frontend" {
+  source = "../../modules/frontend"
+
+  providers = {
+    aws = aws.use1
+  }
+
+  enable      = var.enable_cloudfront
+  name_prefix = module.providers.name_prefix
+  root_domain = var.root_domain
+  zone_id     = aws_route53_zone.public.zone_id
+  site_dir    = abspath("${path.root}/../../src/frontend")
 }

@@ -34,3 +34,9 @@ variable "throttle_burst_limit" {
   default     = 10
   description = "Burst requests per second per route."
 }
+
+variable "cors_allow_origins" {
+  type        = list(string)
+  description = "Allowed browser origins for CORS."
+  default     = []
+}

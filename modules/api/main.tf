@@ -6,6 +6,13 @@ locals {
 resource "aws_apigatewayv2_api" "this" {
   name          = local.api_name
   protocol_type = "HTTP"
+
+  cors_configuration {
+    allow_origins = var.cors_allow_origins
+    allow_methods = ["GET", "POST", "OPTIONS"]
+    allow_headers = ["content-type", "authorization"]
+    max_age       = 3600
+  }
 }
 
 resource "aws_cloudwatch_log_group" "api_access" {
