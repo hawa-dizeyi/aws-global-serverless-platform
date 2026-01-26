@@ -1,17 +1,24 @@
-
 name: Terraform Plan (OIDC)
 
 on:
   pull_request:
+    paths:
+      - "environments/dev/**"
+      - "modules/**"
+      - ".github/workflows/terraform-plan.yml"
 
 permissions:
   contents: read
   id-token: write
 
+env:
+  TF_IN_AUTOMATION: "true"
+  TF_INPUT: "false"
+  AWS_REGION: eu-west-1
+
 jobs:
   plan:
     runs-on: ubuntu-latest
-    environment: prod
 
     defaults:
       run:
@@ -30,7 +37,7 @@ jobs:
       - name: Configure AWS credentials via OIDC
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: "arn:aws:iam::271758791335:role/project-02-global-serverless-dev-gha-terraform"
+          role-to-assume: arn:aws:iam::271758791335:role/project-02-global-serverless-dev-gha-terraform
           aws-region: eu-west-1
           role-session-name: GitHubActions-Terraform-Plan
 

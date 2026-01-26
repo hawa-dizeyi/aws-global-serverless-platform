@@ -19,8 +19,8 @@ variable "lambda_function_name" {
 }
 
 variable "log_retention_days" {
-  type        = number
-  default     = 3
+  type    = number
+  default = 3
 }
 
 variable "throttle_rate_limit" {

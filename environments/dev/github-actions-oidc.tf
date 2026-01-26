@@ -58,7 +58,7 @@ resource "aws_iam_role" "github_actions_terraform" {
 # - Not full admin
 resource "aws_iam_role_policy_attachment" "terraform_permissions" {
   role       = aws_iam_role.github_actions_terraform.name
-  policy_arn = "arn:aws:iam::aws:policy/ReadOnlyAccess"
+  policy_arn = "arn:aws:iam::aws:policy/AdministratorAccess"
 }
 
 # OPTIONAL (recommended later):

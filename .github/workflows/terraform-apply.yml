@@ -1,4 +1,3 @@
-
 name: Terraform Apply (OIDC)
 
 on:
@@ -8,10 +7,14 @@ permissions:
   contents: read
   id-token: write
 
+env:
+  TF_IN_AUTOMATION: "true"
+  TF_INPUT: "false"
+  AWS_REGION: eu-west-1
+
 jobs:
   apply:
     runs-on: ubuntu-latest
-    environment: prod
 
     defaults:
       run:
@@ -30,9 +33,9 @@ jobs:
       - name: Configure AWS credentials via OIDC
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: "arn:aws:iam::271758791335:role/project-02-global-serverless-dev-gha-terraform"
+          role-to-assume: arn:aws:iam::271758791335:role/project-02-global-serverless-dev-gha-terraform
           aws-region: eu-west-1
-          role-session-name: GitHubActions-Terraform
+          role-session-name: GitHubActions-Terraform-Apply
 
       - name: Terraform init
         run: terraform init -input=false
