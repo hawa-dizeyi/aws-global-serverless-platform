@@ -180,6 +180,67 @@ A minimal public UI is hosted on **Vercel** (`ui.hawser-labs.online`) to:
 
 ---
 
+## 📈 Observability
+
+This project includes **regional dashboards, alarms, and log analysis workflows** to demonstrate production-grade observability across an **active-active** architecture.
+
+### SLIs (Service Level Indicators)
+
+We track a small set of **high-signal** indicators per region:
+
+- **Availability / Error Rate**
+  - API Gateway **5XXError** (service faults)
+  - API Gateway **4XXError** (client misuse / abuse signals)
+  - Lambda **Errors** (function-level faults)
+- **Latency**
+  - API Gateway **Latency** (average, per stage)
+- **Operational Evidence**
+  - API access logs in CloudWatch
+  - Logs Insights queries for error breakdown + slow requests
+
+### SLOs (Demo Targets)
+
+For a portfolio/demo environment, the goals are intentionally simple and measurable:
+
+- **Availability:** 99.9% (monthly) across the global entrypoint
+- **Server errors (5XX):** 0 sustained 5XX; alarm if > 0 in a 1-minute window
+- **Client errors (4XX):** allow some client errors; alarm if **> 20/min**
+- **Latency:** average < **1500ms** sustained (3-minute window)
+
+> In production, you’d typically use **percentiles (p95/p99)** for latency, and a formal error budget policy. For this demo, CloudWatch average latency + alarms provides a clean, low-noise signal.
+
+### Dashboards & Alarms
+
+- **Per-region CloudWatch alarms**
+  - API 5XX (critical)
+  - API 4XX (abuse / misuse signal)
+  - API latency (performance regression)
+  - Lambda errors (function failures)
+- **Single-pane CloudWatch dashboard**
+  - Side-by-side regional views for 4XX/5XX, latency, and Lambda errors
+
+📸 Proof screenshots: `screenshots/observability/`
+
+### Logs Insights (Queries)
+
+Example queries used to investigate incidents:
+
+**API error summary**
+~~~text
+fields @timestamp, status, routeKey, latency, ip
+| filter status >= 400
+| stats count() as errors by status, routeKey
+| sort errors desc
+~~~
+
+**Slow Requests**
+~~~text
+fields @timestamp, routeKey, status, latency, ip
+| sort latency desc
+| limit 20
+~~~
+---
+
 ## 📁 Repository Structure
 
 ~~~text
