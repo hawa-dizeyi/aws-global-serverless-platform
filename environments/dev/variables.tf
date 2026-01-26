@@ -76,3 +76,4 @@ variable "step4_enable_latency_records" {
   default     = false
   description = "Step 4B Phase 3: Create Route53 latency alias records for api subdomain."
 }
+# CI test change
