@@ -127,8 +127,8 @@ module "api_primary" {
   cors_allow_origins   = ["https://ui.hawser-labs.online"]
 
   log_retention_days   = 3
-  throttle_rate_limit  = 5
-  throttle_burst_limit = 10
+  throttle_rate_limit  = 2
+  throttle_burst_limit = 4
 }
 
 module "api_secondary" {
@@ -143,8 +143,8 @@ module "api_secondary" {
   cors_allow_origins   = ["https://ui.hawser-labs.online"]
 
   log_retention_days   = 3
-  throttle_rate_limit  = 5
-  throttle_burst_limit = 10
+  throttle_rate_limit  = 2
+  throttle_burst_limit = 4
 }
 
 locals {

@@ -115,6 +115,14 @@ def handler(event, context):
                 {"message": "unsupported media type", "required": "application/json"},
             )
 
+        # Step S3.2 — Payload size guard (prevents cheap abuse)
+        raw_body = event.get("body") or ""
+        if len(raw_body) > 4096:
+            return _resp(
+                413,
+                {"message": "payload too large (max 4KB)"},
+            )
+
         payload, err = _parse_json_body(event)
         if err:
             return _resp(400, {"message": err})
