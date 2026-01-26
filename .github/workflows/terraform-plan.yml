@@ -1,0 +1,47 @@
+
+name: Terraform Plan (OIDC)
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    environment: prod
+
+    defaults:
+      run:
+        shell: bash
+        working-directory: environments/dev
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.7.5
+
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: "arn:aws:iam::271758791335:role/project-02-global-serverless-dev-gha-terraform"
+          aws-region: eu-west-1
+          role-session-name: GitHubActions-Terraform-Plan
+
+      - name: Terraform init
+        run: terraform init -input=false
+
+      - name: Terraform fmt (check)
+        run: terraform fmt -check -recursive
+
+      - name: Terraform validate
+        run: terraform validate
+
+      - name: Terraform plan
+        run: terraform plan -input=false -no-color
