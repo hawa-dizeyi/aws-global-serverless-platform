@@ -1,18 +1,38 @@
 # 🌍 Project 02 — Global Serverless Platform (Multi-Region, Active-Active)
 
-This project demonstrates the design and implementation of a **globally distributed, serverless backend on AWS**, built with **Terraform** and following **production-grade cloud engineering practices**.
+This project demonstrates the design and implementation of a **globally distributed, serverless backend on AWS**, built with **Terraform** and aligned with **Staff / Principal Cloud Engineer–level practices**.
 
-The platform is **multi-region (active-active)**, highly available, cost-aware, and designed for **zero-downtime regional resilience** using DNS-based traffic steering and health-check–driven failover.
+The platform is **multi-region (active-active)**, highly available, cost-aware, and designed for **regional isolation, fast recovery, and operational clarity**, using DNS-based traffic steering and health-check–driven failover.
 
 ---
 
 ## 🎯 Project Goals
 
-- Build a **multi-region serverless backend** using AWS native services
-- Demonstrate **true active-active architecture** across regions
-- Implement infrastructure as code with **Terraform**
-- Apply **cost controls and safe defaults**
-- Produce **verifiable deployment proof** suitable for a senior-level portfolio
+- Design a **true active-active serverless backend** across AWS regions
+- Demonstrate **failure-aware architecture**, not just high availability
+- Implement **clean, modular Infrastructure as Code** with Terraform
+- Apply **security, cost, and operational guardrails by default**
+- Produce **verifiable, reproducible proof** suitable for senior-level interviews
+
+---
+
+## 🧭 Scope & Non-Goals (Intentional)
+
+**In scope**
+- Backend platform design
+- Regional isolation & failover
+- Data replication guarantees
+- Observability and operational signals
+- Security controls appropriate for a public API
+
+**Explicitly out of scope**
+- Authentication / authorization (Cognito, OAuth)
+- CI/CD pipelines (intentionally skipped after validation)
+- Business logic complexity
+- Long-lived data modeling
+- Frontend product development
+
+> This project focuses on **platform correctness and resilience**, not feature completeness.
 
 ---
 
@@ -23,95 +43,121 @@ The platform is **multi-region (active-active)**, highly available, cost-aware, 
 | Primary   | eu-west-1 (Europe – Ireland) |
 | Secondary | eu-central-1 (Europe – Frankfurt) |
 
-**Why this pairing:**
-- Low latency for EU users
-- Strong regional separation
-- Common real-world production pairing
-- Full service parity for serverless workloads
+**Why this pairing**
+- Low latency for EU traffic
+- Strong geographic separation
+- Common production pairing
+- Full parity for serverless services
 
 ---
 
-## 🏗️ Architecture (Current State)
+## 🏗️ Architecture Overview
 
-### 1️⃣ Infrastructure Foundation
+### High-Level Components
 
-- Terraform multi-provider setup
+- **Route 53** — DNS failover & health checks
+- **API Gateway (HTTP API)** — regional ingress
+- **AWS Lambda** — stateless compute per region
+- **DynamoDB Global Tables** — active-active data layer
+- **CloudWatch** — metrics, alarms, logs
+- **Terraform** — single source of truth
+
+---
+
+## 🔄 End-to-End Request Flow
+
+1. Client resolves `api.hawser-labs.online`
+2. Route 53 evaluates regional health checks
+3. DNS routes traffic to **PRIMARY** or **SECONDARY**
+4. API Gateway receives request in selected region
+5. Regional Lambda executes business logic
+6. Write persists to DynamoDB Global Table
+7. DynamoDB replicates change cross-region automatically
+
+No synchronous cross-region calls.  
+No shared regional dependencies.
+
+---
+
+## 🧱 Infrastructure Foundation
+
+- Terraform multi-provider configuration
 - Explicit primary / secondary provider aliasing
-- Environment-scoped configuration (`environments/dev`)
-- Centralized naming and tagging strategy
-- Feature flags for optional services (CloudFront, WAF, Route 53 health checks)
-- Safe defaults to reduce accidental cost or blast radius
+- Environment isolation (`environments/dev`)
+- Centralized naming + tagging
+- Feature flags for optional services (CloudFront, WAF, health checks)
+- Safe defaults to minimize blast radius and cost
 
 ---
 
-### 2️⃣ Global Data Layer — DynamoDB Global Tables
+## 🗄️ Global Data Layer — DynamoDB Global Tables
 
-- DynamoDB Global Table spanning:
+- Single DynamoDB table replicated across:
   - eu-west-1
   - eu-central-1
-- `PAY_PER_REQUEST` billing (no capacity planning)
-- TTL enabled for automatic cleanup of test data
-- DynamoDB Streams enabled for global replication
+- `PAY_PER_REQUEST` billing (no capacity tuning)
+- TTL enabled for automatic data expiry
+- Streams enabled (required for replication)
 
-**Result:**  
-Writes in one region automatically replicate to the other without custom code.
+**Outcome:**  
+Writes in either region propagate automatically without custom replication logic.
 
-📸 Screenshots: `screenshots/dynamodb/`
+📸 Proof: `screenshots/dynamodb/`
 
 ---
 
-### 3️⃣ Compute Layer — AWS Lambda (Multi-Region)
+## ⚙️ Compute Layer — AWS Lambda (Multi-Region)
 
-- Identical Lambda functions deployed independently in both regions
+- Identical Lambda deployed independently per region
 - Runtime: **Python 3.12**
-- ZIP-based deployment using Terraform (`archive_file`)
-- Shared execution role with **least-privilege** DynamoDB access
-- Short CloudWatch log retention (cost-controlled)
-- No reserved concurrency (avoids account-level constraints)
+- ZIP-based deployment via Terraform
+- Shared execution role with **least-privilege IAM**
+- Short log retention (cost-controlled)
+- Stateless, idempotent handlers
 
-**Endpoints:**
-- `GET /health` — regional health response
-- `POST /write` — writes to DynamoDB (replicated globally)
+**Endpoints**
+- `GET /health`
+- `POST /write`
 
-📸 Screenshots: `screenshots/lambda/`
-
----
-
-### 4️⃣ API Layer — API Gateway (Active-Active)
-
-- HTTP API Gateway deployed independently per region
-- Regional APIs integrated with regional Lambdas
-- Identical routes in each region
-- Throttling and safe defaults enabled
-- No cross-region dependencies
-
-📸 Screenshots: `screenshots/api-gateway/`
+📸 Proof: `screenshots/lambda/`
 
 ---
 
-### 5️⃣ Global Traffic Management — Route 53 (Failover + Health Checks)
+## 🌐 API Layer — API Gateway (Active-Active)
+
+- HTTP APIs deployed per region
+- Each API integrates only with its local Lambda
+- Throttling and burst limits enabled
+- No cross-region coupling
+- Explicit method enforcement (POST-only writes)
+
+📸 Proof: `screenshots/api-gateway/`
+
+---
+
+## 🌍 Global Traffic Management — Route 53 (Failover)
 
 - Public hosted zone: **hawser-labs.online**
-- API subdomain: **api.hawser-labs.online**
-- **Failover routing policy** (PRIMARY / SECONDARY)
-- HTTPS health checks against `/health` per region
-- Automatic removal of unhealthy region from DNS
+- API entrypoint: **api.hawser-labs.online**
+- **Failover routing policy**
+  - PRIMARY: eu-west-1
+  - SECONDARY: eu-central-1
+- HTTPS health checks on `/health`
 - IPv4 (`A`) and IPv6 (`AAAA`) records
+- Automatic DNS failover on health degradation
 
-📸 Screenshots: `screenshots/route53/`
+📸 Proof: `screenshots/route53/`
 
 ---
 
 ## 🔁 Regional Isolation & Active-Active Replication (Proof)
 
-This section provides **explicit, reproducible proof** of active-active behavior and regional isolation.
-
-### ✅ Independent Regional Health
+### Independent Regional Health
 
 Each region responds independently:
 
-- eu-west-1 reports `region: eu-west-1`
-- eu-central-1 reports `region: eu-central-1`
+- eu-west-1 → `region: eu-west-1`
+- eu-central-1 → `region: eu-central-1`
 
 📸 Evidence:
 - `screenshots/dynamodb/regional-health-eu.png`
@@ -119,14 +165,14 @@ Each region responds independently:
 
 ---
 
-### ✅ Cross-Region Data Replication
+### Cross-Region Data Replication
 
-1. Write executed in **Ireland**
-2. Item read from **Frankfurt**
-3. Write executed in **Frankfurt**
-4. Item read from **Ireland**
+1. Write in Ireland
+2. Read in Frankfurt
+3. Write in Frankfurt
+4. Read in Ireland
 
-Replication is handled entirely by DynamoDB Global Tables.
+Replication is native to DynamoDB Global Tables.
 
 📸 Evidence:
 - `screenshots/dynamodb/write-eu-output.png`
@@ -136,109 +182,104 @@ Replication is handled entirely by DynamoDB Global Tables.
 
 ---
 
-### ✅ Automated Failover (Controlled Failure)
+### Controlled Failover Test
 
-- Health check intentionally failed for PRIMARY (eu-west-1)
-- Route 53 marked PRIMARY as unhealthy
-- DNS automatically routed traffic to SECONDARY (eu-central-1)
+- PRIMARY health check intentionally failed
+- Route 53 marked PRIMARY unhealthy
+- Traffic automatically routed to SECONDARY
 - No client-side changes required
 
 📸 Evidence:
-- `screenshots/route53/failover-routing.png`
 - `screenshots/route53/primary-unhealthy.png`
+- `screenshots/route53/failover-routing.png`
 
 ---
 
-### ✅ Frontend Validation (CORS + Visibility)
+## 🧪 Frontend as an Engineering Instrument
 
-A minimal public UI is hosted on **Vercel** (`ui.hawser-labs.online`) to:
+A minimal UI is hosted on **Vercel** (`ui.hawser-labs.online`) to:
 
-- Justify **strict CORS** configuration
-- Visualize routing decisions
-- Display:
-  - Region badge
-  - Request latency
-  - Failover detection banner
-  - Animated response cards
+- Justify strict CORS configuration
+- Visualize routing behavior
+- Display region badges
+- Measure request latency
+- Detect failover events
+- Animate responses for clarity
+
+This UI is a **diagnostic surface**, not a product frontend.
 
 📸 Evidence:
-- `screenshots/frontend/frontend-global-health.png`
-- `screenshots/frontend/frontend-latency.png`
-- `screenshots/frontend/frontend-failover-banner.png`
+- `screenshots/frontend/`
 
 ---
 
 ## 🔐 Security & Cost Controls
 
-- No static credentials committed
-- IAM least-privilege policies
-- No EC2, NAT Gateways, or always-on infrastructure
-- Short log retention across services
+- No static AWS credentials
+- IAM least-privilege enforcement
 - Strict CORS (no wildcard origins)
-- Feature-flagged edge services (CloudFront, WAF)
-- Clean, reproducible Terraform state
+- Payload size limits (abuse protection)
+- Method enforcement (POST-only writes)
+- Security headers on all responses
+- No EC2, NAT Gateways, or idle resources
+- Feature-flagged edge services
 
 ---
 
 ## 📈 Observability
 
-This project includes **regional dashboards, alarms, and log analysis workflows** to demonstrate production-grade observability across an **active-active** architecture.
+### SLIs Tracked Per Region
 
-### SLIs (Service Level Indicators)
+- API Gateway 5XX (service faults)
+- API Gateway 4XX (client misuse signals)
+- API Gateway latency
+- Lambda errors
 
-We track a small set of **high-signal** indicators per region:
+### SLO Targets (Demo)
 
-- **Availability / Error Rate**
-  - API Gateway **5XXError** (service faults)
-  - API Gateway **4XXError** (client misuse / abuse signals)
-  - Lambda **Errors** (function-level faults)
-- **Latency**
-  - API Gateway **Latency** (average, per stage)
-- **Operational Evidence**
-  - API access logs in CloudWatch
-  - Logs Insights queries for error breakdown + slow requests
+- Availability: **99.9%**
+- Sustained 5XX: **0**
+- 4XX alert threshold: **>20/min**
+- Average latency: **<1500ms**
 
-### SLOs (Demo Targets)
+### Tooling
 
-For a portfolio/demo environment, the goals are intentionally simple and measurable:
+- CloudWatch alarms per region
+- Side-by-side regional dashboards
+- Logs Insights queries for:
+  - Error analysis
+  - Slow request identification
 
-- **Availability:** 99.9% (monthly) across the global entrypoint
-- **Server errors (5XX):** 0 sustained 5XX; alarm if > 0 in a 1-minute window
-- **Client errors (4XX):** allow some client errors; alarm if **> 20/min**
-- **Latency:** average < **1500ms** sustained (3-minute window)
+📸 Proof: `screenshots/observability/`
 
-> In production, you’d typically use **percentiles (p95/p99)** for latency, and a formal error budget policy. For this demo, CloudWatch average latency + alarms provides a clean, low-noise signal.
+---
 
-### Dashboards & Alarms
+## ⚖️ Tradeoffs & Alternatives Considered
 
-- **Per-region CloudWatch alarms**
-  - API 5XX (critical)
-  - API 4XX (abuse / misuse signal)
-  - API latency (performance regression)
-  - Lambda errors (function failures)
-- **Single-pane CloudWatch dashboard**
-  - Side-by-side regional views for 4XX/5XX, latency, and Lambda errors
+- **Route 53 vs Global Accelerator**  
+  → Route 53 chosen for simplicity, transparency, and cost
 
-📸 Proof screenshots: `screenshots/observability/`
+- **DynamoDB Global Tables vs custom replication**  
+  → Native replication preferred over operational complexity
 
-### Logs Insights (Queries)
+- **API Gateway vs ALB**  
+  → API Gateway fits serverless scaling and cost model
 
-Example queries used to investigate incidents:
+- **CloudFront in front of API**  
+  → Intentionally omitted; not required for latency or availability here
 
-**API error summary**
-~~~text
-fields @timestamp, status, routeKey, latency, ip
-| filter status >= 400
-| stats count() as errors by status, routeKey
-| sort errors desc
-~~~
+---
 
-**Slow Requests**
-~~~text
-fields @timestamp, routeKey, status, latency, ip
-| sort latency desc
-| limit 20
-~~~
+## 🧨 Failure Modes & Blast Radius
+
+| Failure | Impact | Recovery |
+|------|------|--------|
+| Regional Lambda failure | Traffic shifts | Automatic |
+| API Gateway outage | Region isolated | Automatic |
+| DynamoDB regional issue | Writes rerouted | Automatic |
+| DNS / health check misconfig | Global impact | Manual |
+| Code bug | Logical failure | Redeploy |
+
 ---
 
 ## 📁 Repository Structure
@@ -266,6 +307,8 @@ fields @timestamp, routeKey, status, latency, ip
 │   ├── api-gateway/
 │   ├── route53/
 │   └── frontend/
+│   ├── observability/
+│   └── security/
 └── README.md
 ~~~
 
@@ -297,9 +340,11 @@ This project avoids hidden dependencies and is designed to teardown cleanly.
 
 ## 📎 Notes
 
-This repository is part of a cloud engineering portfolio and intentionally prioritizes:
-- clarity over complexity
-- correctness over shortcuts
-- realism over “toy” examples
+This project is part of a **Staff / Principal Cloud Engineering portfolio** and intentionally prioritizes:
+
+- architectural clarity
+- operational realism
+- explicit tradeoff documentation
+- reproducibility over polish
 
 Design decisions reflect real-world AWS tradeoffs rather than tutorial-style shortcuts.
